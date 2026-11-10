@@ -1,0 +1,184 @@
+name: Fire OS 6 build
+
+# Builds FMHYPlay for Fire OS 6 / Android 7.1 devices and publishes the TV APK as a release in this fork.
+# Run it from the Actions tab: "Fire OS 6 build" > Run workflow.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply the Android 7.1 changes
+        run: |
+          python3 - <<'PYEOF'
+          import pathlib
+
+          SRC = "src/me/champdev/weblock/"
+
+          def rep(path, old, new, count=1):
+              p = pathlib.Path(path)
+              s = p.read_text(encoding="utf-8")
+              n = s.count(old)
+              if n != count:
+                  raise SystemExit("PATCH FAILED in %s: expected %d match(es), found %d, for: %s" % (path, count, n, old[:70]))
+              p.write_text(s.replace(old, new), encoding="utf-8")
+
+          # 1. Build for Android 7.1 (API 25) instead of 8.0 (API 26)
+          rep("build.sh", "--min-sdk-version 26", "--min-sdk-version 25", 2)
+          rep("build.sh", "--min-api 26", "--min-api 25")
+          rep("warp/build.sh", "aarch64-linux-android26", "aarch64-linux-android25")
+          rep("warp/build.sh", "armv7a-linux-androideabi26", "armv7a-linux-androideabi25")
+
+          # 2. Helpers for things that only exist from Android 8
+          pathlib.Path(SRC + "Compat.java").write_text('''package me.champdev.weblock;
+
+          import android.content.Context;
+          import android.content.Intent;
+
+          import java.io.ByteArrayOutputStream;
+          import java.io.File;
+          import java.io.FileInputStream;
+          import java.io.IOException;
+          import java.io.InputStream;
+          import java.text.SimpleDateFormat;
+          import java.util.Arrays;
+          import java.util.Calendar;
+          import java.util.Locale;
+          import java.util.TimeZone;
+
+          /** Stand-ins for APIs that need Android 8 (String.join, java.time, java.nio.file, startForegroundService). */
+          final class Compat {
+              private Compat() { }
+
+              static String join(CharSequence sep, Iterable<? extends CharSequence> parts) {
+                  StringBuilder b = new StringBuilder();
+                  boolean first = true;
+                  for (CharSequence p : parts) {
+                      if (!first) b.append(sep);
+                      b.append(p);
+                      first = false;
+                  }
+                  return b.toString();
+              }
+
+              static String join(CharSequence sep, CharSequence... parts) { return join(sep, Arrays.asList(parts)); }
+
+              /** Days since 1970-01-01 for today's local date. */
+              static long today() {
+                  long now = System.currentTimeMillis();
+                  return Math.floorDiv(now + TimeZone.getDefault().getOffset(now), 86400000L);
+              }
+
+              /** The calendar year it was `daysAgo` days ago. */
+              static int year(int daysAgo) {
+                  Calendar c = Calendar.getInstance();
+                  c.add(Calendar.DAY_OF_YEAR, -daysAgo);
+                  return c.get(Calendar.YEAR);
+              }
+
+              /** Days since 1970-01-01 for a yyyy-MM-dd date; IllegalArgumentException when it is not one. */
+              static long epochDay(String ymd) {
+                  SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+                  f.setLenient(false);
+                  f.setTimeZone(TimeZone.getTimeZone("UTC"));
+                  try {
+                      return Math.floorDiv(f.parse(ymd).getTime(), 86400000L);
+                  } catch (java.text.ParseException e) {
+                      throw new IllegalArgumentException(e);
+                  }
+              }
+
+              static String readAll(File f) throws IOException {
+                  try (InputStream in = new FileInputStream(f)) {
+                      ByteArrayOutputStream out = new ByteArrayOutputStream();
+                      byte[] buf = new byte[8192];
+                      int n;
+                      while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                      return new String(out.toByteArray(), java.nio.charset.Charset.forName("UTF-8"));
+                  }
+              }
+
+              static void startFg(Context c, Intent i) {
+                  if (android.os.Build.VERSION.SDK_INT >= 26) c.startForegroundService(i); else c.startService(i);
+              }
+          }
+          ''', encoding="utf-8")
+
+          # 3. String.join -> Compat.join
+          for f, n in [("AdBlock.java", 1), ("Catalog.java", 2), ("PlayerActivity.java", 1), ("Sites.java", 1), ("Iptv.java", 2), ("TitleActivity.java", 1)]:
+              rep(SRC + f, "String.join(", "Compat.join(", n)
+
+          # 4. java.nio.file / java.time
+          rep(SRC + "SubSync.java", "import java.nio.file.Files;\n", "")
+          rep(SRC + "SubSync.java", "new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8)", "Compat.readAll(f)")
+          rep(SRC + "Catalog.java", "java.time.LocalDate now = java.time.LocalDate.now();\n        long today = now.toEpochDay();", "long today = Compat.today();")
+          rep(SRC + "Catalog.java", "for (int year = now.getYear(); year >= now.minusDays(200).getYear(); year--)", "for (int year = Compat.year(0); year >= Compat.year(200); year--)")
+          rep(SRC + "Catalog.java", "java.time.LocalDate.now().minusDays(120).getYear()", "Compat.year(120)")
+          rep(SRC + "Catalog.java", "java.time.LocalDate.parse(t.released.substring(0, 10)).toEpochDay()", "Compat.epochDay(t.released.substring(0, 10))")
+          rep(SRC + "Catalog.java", "catch (java.time.format.DateTimeParseException e)", "catch (IllegalArgumentException e)")
+
+          # 5. Cast service and notification
+          rep(SRC + "Cast.java", "c.startForegroundService(new Intent(c, Keep.class))", "Compat.startFg(c, new Intent(c, Keep.class))")
+          rep(SRC + "Chromecast.java", "c.startForegroundService(new Intent(c, Cast.Keep.class))", "Compat.startFg(c, new Intent(c, Cast.Keep.class))")
+          rep(SRC + "Cast.java", "getSystemService(NotificationManager.class).createNotificationChannel(", "if (android.os.Build.VERSION.SDK_INT >= 26) getSystemService(NotificationManager.class).createNotificationChannel(")
+          rep(SRC + "Cast.java", 'new Notification.Builder(this, "cast")', '(android.os.Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(this, "cast") : new Notification.Builder(this))')
+
+          # 6. View methods from Android 8
+          rep(SRC + "PlayerActivity.java", "        root.setDefaultFocusHighlightEnabled(false);", "        if (android.os.Build.VERSION.SDK_INT >= 26) root.setDefaultFocusHighlightEnabled(false);")
+          rep(SRC + "PlayerActivity.java", "        skipBtn.setDefaultFocusHighlightEnabled(false);", "        if (android.os.Build.VERSION.SDK_INT >= 26) skipBtn.setDefaultFocusHighlightEnabled(false);")
+          rep(SRC + "PlayerActivity.java", "        t.setTooltipText(label);", "        if (android.os.Build.VERSION.SDK_INT >= 26) t.setTooltipText(label);")
+          rep(SRC + "PlayerActivity.java", "return !App.tv && player != null", "return android.os.Build.VERSION.SDK_INT >= 26 && !App.tv && player != null")
+          rep(SRC + "Home.java", "            warpChip.setTooltipText(label);", "            if (android.os.Build.VERSION.SDK_INT >= 26) warpChip.setTooltipText(label);")
+          rep(SRC + "Home.java", "            adChip.setTooltipText(adLabel);", "            if (android.os.Build.VERSION.SDK_INT >= 26) adChip.setTooltipText(adLabel);")
+
+          # 7. Saved site logins (WebViewDatabase methods are from Android 8; the WebView ones do the same before that)
+          rep(SRC + "WebActivity.java", "String[] saved = db.getHttpAuthUsernamePassword(host, realm);",
+              "String[] saved = android.os.Build.VERSION.SDK_INT >= 26 ? db.getHttpAuthUsernamePassword(host, realm) : web.getHttpAuthUsernamePassword(host, realm);")
+          rep(SRC + "WebActivity.java", "db.setHttpAuthUsernamePassword(host, realm, u, p);",
+              "if (android.os.Build.VERSION.SDK_INT >= 26) db.setHttpAuthUsernamePassword(host, realm, u, p); else web.setHttpAuthUsernamePassword(host, realm, u, p);")
+
+          # 8. One optional-chaining call in the page script (needs a newer WebView than Android 7.1 usually has)
+          rep("assets/roles.js", "const add = n => ((n.getAttribute('class') || '')", "const add = n => (((n.getAttribute('class') || '')")
+          rep("assets/roles.js", ")?.forEach(t => out.add(t.toLowerCase()));", ") || []).forEach(t => out.add(t.toLowerCase()));")
+          print("patch applied")
+          PYEOF
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: warp/go.mod
+          cache-dependency-path: warp/go.sum
+
+      - name: Android SDK
+        run: |
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" "platforms;android-34" "build-tools;35.0.0" > /dev/null
+
+      - name: Build the WARP helper
+        run: warp/build.sh
+
+      - name: Build
+        env:
+          VERSION_NAME: 2.18.6-fireos6
+        run: ./build.sh
+
+      - name: Publish the TV APK as a release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp FMHYPlay-TV-v*.apk FMHYPlay-TV-fireos6.apk
+          gh release delete fireos6 --cleanup-tag --yes --repo "$GITHUB_REPOSITORY" || true
+          gh release create fireos6 FMHYPlay-TV-fireos6.apk --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "FMHYPlay for Fire OS 6" --notes "Built from this fork with the Android 7.1 changes. Install FMHYPlay-TV-fireos6.apk."
