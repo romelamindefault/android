@@ -1,7 +1,7 @@
 name: Fire OS 6 build
 
 # Automatic Fire OS 6 / Android 7.1 build of FMHYPlay.
-# Every 2 hours it looks at the developer's main branch. When there is something new it applies the Android 7.1
+# Every 2 days it looks at the developer's main branch. When there is something new it applies the Android 7.1
 # changes, builds, checks the result, and publishes the TV APK as a new release in this fork. If any check fails
 # nothing is published, so the last good APK stays in place.
 # Newest APK, always the same link: https://github.com/<your user>/android/releases/latest/download/FMHYPlay-TV-fireos6.apk
@@ -9,7 +9,7 @@ name: Fire OS 6 build
 
 on:
   schedule:
-        - cron: "23 4 */2 * *"
+    - cron: "23 4 */2 * *"
   workflow_dispatch:
     inputs:
       force:
@@ -356,9 +356,20 @@ jobs:
         run: |
           APK=$(ls FMHYPlay-TV-v*.apk)
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
-          MIN=$("$BT/aapt2" dump badging "$APK" | sed -n "s/^sdkVersion:'\([0-9]*\)'.*/\1/p" | head -1)
-          echo "$APK needs Android API $MIN or newer"
-          if [ -z "$MIN" ] || [ "$MIN" -gt 25 ]; then echo "The APK needs a newer Android than Fire OS 6"; exit 1; fi
+          "$BT/aapt2" dump badging "$APK" > /tmp/badging.txt 2>&1 || true
+          MIN=$(sed -nE "s/^(minS|s)dkVersion:'([0-9]+)'.*/\2/p" /tmp/badging.txt | head -1)
+          if [ -z "$MIN" ]; then
+            "$BT/aapt2" dump xmltree --file AndroidManifest.xml "$APK" > /tmp/manifest.txt 2>&1 || true
+            MIN=$(sed -nE 's/.*minSdkVersion[^=]*=([0-9]+).*/\1/p' /tmp/manifest.txt | head -1)
+          fi
+          echo "$APK needs Android API ${MIN:-unknown} or newer"
+          if [ -z "$MIN" ]; then
+            echo "Could not read the minimum Android version. What the tools printed:"
+            head -15 /tmp/badging.txt
+            head -30 /tmp/manifest.txt
+            exit 1
+          fi
+          if [ "$MIN" -gt 25 ]; then echo "The APK needs a newer Android than Fire OS 6"; exit 1; fi
           "$BT/apksigner" verify --min-sdk-version 25 "$APK"
           if ! unzip -l "$APK" | grep -q "lib/armeabi-v7a/"; then echo "The 32-bit ARM files are missing from the APK"; exit 1; fi
           echo "APK checks passed"
