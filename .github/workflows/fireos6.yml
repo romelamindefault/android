@@ -1,9 +1,9 @@
 name: Fire OS 6 build
 
-# Automatic Fire OS 6 / Android 7.1 build of FMHYPlay.
-# Every 2 days it looks at the developer's main branch. When there is something new it applies the Android 7.1
-# changes, builds, checks the result, and publishes the TV APK as a new release in this fork. If any check fails
-# nothing is published, so the last good APK stays in place.
+# Automatic Fire OS 6 / Android 7.1 build of FMHYPlay, official releases only.
+# Every 2 days it looks at the developer's newest official release (not the work in progress on main). When there is a new
+# one it applies the Android 7.1 changes, builds, checks the result, and publishes the TV APK as a new release in this fork.
+# If any check fails nothing is published, so the last good APK stays in place.
 # Newest APK, always the same link: https://github.com/<your user>/android/releases/latest/download/FMHYPlay-TV-fireos6.apk
 # You can also run it by hand: Actions > Fire OS 6 build > Run workflow (tick "force" to rebuild the same version).
 
@@ -26,7 +26,6 @@ concurrency:
 
 env:
   UPSTREAM: fmhyplay/android
-  UPSTREAM_REF: main
 
 jobs:
   check:
@@ -34,6 +33,7 @@ jobs:
     outputs:
       build: ${{ steps.c.outputs.build }}
       sha: ${{ steps.c.outputs.sha }}
+      tag: ${{ steps.c.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
 
@@ -55,25 +55,29 @@ jobs:
             git push
           fi
 
-      - name: Look for something new from the developer
+      - name: Look for a new official release from the developer
         id: c
         env:
           GH_TOKEN: ${{ github.token }}
           FORCE: ${{ inputs.force }}
         run: |
-          SHA=$(git ls-remote "https://github.com/$UPSTREAM.git" "refs/heads/$UPSTREAM_REF" | cut -f1)
-          if [ -z "$SHA" ]; then echo "Could not read $UPSTREAM"; exit 1; fi
-          SHORT=${SHA:0:7}
+          TAG=$(gh api "repos/$UPSTREAM/releases/latest" --jq .tag_name)
+          if [ -z "$TAG" ]; then echo "Could not read the newest release of $UPSTREAM"; exit 1; fi
+          REFS=$(git ls-remote "https://github.com/$UPSTREAM.git" "refs/tags/$TAG" "refs/tags/$TAG^{}")
+          SHA=$(echo "$REFS" | grep '\^{}$' | cut -f1 | head -1)
+          if [ -z "$SHA" ]; then SHA=$(echo "$REFS" | head -1 | cut -f1); fi
+          if [ -z "$SHA" ]; then echo "Could not find the code for release $TAG"; exit 1; fi
           BUILD=true
           if [ "$FORCE" != "true" ]; then
-            if gh release view "fireos6-$SHORT" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
-               || gh release view "fireos6-failed-$SHORT" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            if gh release view "fireos6-$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+               || gh release view "fireos6-failed-$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
               BUILD=false
             fi
           fi
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "build=$BUILD" >> "$GITHUB_OUTPUT"
-          echo "$UPSTREAM $UPSTREAM_REF is at $SHORT, build needed: $BUILD"
+          echo "Newest official release is $TAG (${SHA:0:7}), build needed: $BUILD"
 
   build:
     needs: check
@@ -82,6 +86,7 @@ jobs:
     timeout-minutes: 60
     env:
       SHA: ${{ needs.check.outputs.sha }}
+      TAG: ${{ needs.check.outputs.tag }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Get the developer's code
@@ -274,10 +279,8 @@ jobs:
 
       - name: Build
         run: |
-          BASE=$(sed -n 's/^VERSION_CODE=\${VERSION_CODE:-\([0-9]*\)}.*/\1/p' build.sh)
-          V=$(sed -n 's/^VERSION_NAME=\${VERSION_NAME:-\([^}]*\)}.*/\1/p' build.sh)
-          if [ -z "$BASE" ] || [ -z "$V" ]; then echo "Could not read the version from build.sh"; exit 1; fi
-          VERSION_CODE=$(( BASE * 10000 + GITHUB_RUN_NUMBER )) VERSION_NAME="$V-fireos6" ./build.sh
+          if [ -z "$TAG" ]; then echo "No release tag"; exit 1; fi
+          VERSION_CODE=$(( 300000000 + GITHUB_RUN_NUMBER )) VERSION_NAME="${TAG#v}-fireos6" ./build.sh
 
       - name: Check 1, no code that crashes on Android 7.1
         run: |
@@ -376,17 +379,16 @@ jobs:
 
       - name: Publish the TV APK as the newest release
         run: |
-          SHORT=${SHA:0:7}
-          TAG="fireos6-$SHORT"
+          REL="fireos6-$TAG"
           APK=$(ls FMHYPlay-TV-v*.apk)
           V=$(echo "$APK" | sed 's/FMHYPlay-TV-v//; s/\.apk$//')
           cp "$APK" FMHYPlay-TV-fireos6.apk
-          for t in "$TAG" "fireos6-failed-$SHORT"; do
+          for t in "$REL" "fireos6-failed-$TAG"; do
             gh release delete "$t" --cleanup-tag --yes --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
           done
-          gh release create "$TAG" FMHYPlay-TV-fireos6.apk --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --latest \
-            --title "FMHYPlay $V for Fire OS 6 (developer commit $SHORT)" \
-            --notes "Built from https://github.com/$UPSTREAM/commit/$SHA with the Android 7.1 changes. Install FMHYPlay-TV-fireos6.apk. It passed the Android 7.1 checks."
+          gh release create "$REL" FMHYPlay-TV-fireos6.apk --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --latest \
+            --title "FMHYPlay ${TAG#v} for Fire OS 6" \
+            --notes "Built from the developer official release https://github.com/$UPSTREAM/releases/tag/$TAG with the Android 7.1 changes. Install FMHYPlay-TV-fireos6.apk. It passed the Android 7.1 checks."
           # keep the newest 5 good builds and the newest 5 blocked-build notes, delete the rest
           gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName,publishedAt \
             --jq '[.[] | select((.tagName | startswith("fireos6")) and ((.tagName | startswith("fireos6-failed")) | not))] | sort_by(.publishedAt) | reverse | .[5:] | .[].tagName' \
@@ -394,12 +396,11 @@ jobs:
           gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName,publishedAt \
             --jq '[.[] | select(.tagName | startswith("fireos6-failed"))] | sort_by(.publishedAt) | reverse | .[5:] | .[].tagName' \
             | while read -r t; do gh release delete "$t" --cleanup-tag --yes --repo "$GITHUB_REPOSITORY" || true; done
-          echo "Published $TAG ($V)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Published $REL ($V)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Note that this version did not pass (the last good APK stays as it is)
         if: failure()
         run: |
-          SHORT=${SHA:0:7}
-          gh release create "fireos6-failed-$SHORT" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
-            --title "Blocked: developer commit $SHORT did not pass the Fire OS 6 checks" \
-            --notes "Nothing was published for this commit and your last good APK is unchanged. Details: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID . It is retried when the developer pushes again, or run the workflow by hand with force ticked." || true
+          gh release create "fireos6-failed-$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+            --title "Blocked: developer release $TAG did not pass the Fire OS 6 checks" \
+            --notes "Nothing was published for this release and your last good APK is unchanged. Details: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID . It is retried when the developer publishes a newer release, or run the workflow by hand with force ticked." || true
