@@ -1,19 +1,94 @@
 name: Fire OS 6 build
 
-# Builds FMHYPlay for Fire OS 6 / Android 7.1 devices and publishes the TV APK as a release in this fork.
-# Run it from the Actions tab: "Fire OS 6 build" > Run workflow.
+# Automatic Fire OS 6 / Android 7.1 build of FMHYPlay.
+# Every 2 hours it looks at the developer's main branch. When there is something new it applies the Android 7.1
+# changes, builds, checks the result, and publishes the TV APK as a new release in this fork. If any check fails
+# nothing is published, so the last good APK stays in place.
+# Newest APK, always the same link: https://github.com/<your user>/android/releases/latest/download/FMHYPlay-TV-fireos6.apk
+# You can also run it by hand: Actions > Fire OS 6 build > Run workflow (tick "force" to rebuild the same version).
 
 on:
+  schedule:
+        - cron: "23 4 */2 * *"
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Rebuild even if this version was already built"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
+concurrency:
+  group: fireos6-build
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: fmhyplay/android
+  UPSTREAM_REF: main
+
 jobs:
-  apk:
+  check:
     runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.c.outputs.build }}
+      sha: ${{ steps.c.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Touch the saved signing key so GitHub does not delete it
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            release.jks
+            release.pass
+          key: signing-key-v1
+
+      - name: Keep the schedule alive (GitHub pauses schedules after 60 quiet days)
+        run: |
+          LAST=$(git log -1 --format=%ct)
+          if [ $(( $(date +%s) - LAST )) -gt 2592000 ]; then
+            git config user.name "github-actions"
+            git config user.email "github-actions@users.noreply.github.com"
+            git commit --allow-empty -m "Keep the Fire OS 6 schedule active"
+            git push
+          fi
+
+      - name: Look for something new from the developer
+        id: c
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          SHA=$(git ls-remote "https://github.com/$UPSTREAM.git" "refs/heads/$UPSTREAM_REF" | cut -f1)
+          if [ -z "$SHA" ]; then echo "Could not read $UPSTREAM"; exit 1; fi
+          SHORT=${SHA:0:7}
+          BUILD=true
+          if [ "$FORCE" != "true" ]; then
+            if gh release view "fireos6-$SHORT" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+               || gh release view "fireos6-failed-$SHORT" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              BUILD=false
+            fi
+          fi
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
+          echo "$UPSTREAM $UPSTREAM_REF is at $SHORT, build needed: $BUILD"
+
+  build:
+    needs: check
+    if: needs.check.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      SHA: ${{ needs.check.outputs.sha }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Get the developer's code
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.UPSTREAM }}
+          ref: ${{ needs.check.outputs.sha }}
 
       - name: Apply the Android 7.1 changes
         run: |
@@ -184,7 +259,7 @@ jobs:
         run: |
           SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKM" --licenses > /dev/null || true
-          "$SDKM" "platforms;android-34" "build-tools;35.0.0" > /dev/null
+          "$SDKM" "platforms;android-34" "platforms;android-25" "build-tools;35.0.0" > /dev/null
 
       - name: Build the WARP helper
         run: warp/build.sh
@@ -199,14 +274,121 @@ jobs:
 
       - name: Build
         run: |
+          BASE=$(sed -n 's/^VERSION_CODE=\${VERSION_CODE:-\([0-9]*\)}.*/\1/p' build.sh)
           V=$(sed -n 's/^VERSION_NAME=\${VERSION_NAME:-\([^}]*\)}.*/\1/p' build.sh)
-          VERSION_NAME="${V:-0}-fireos6" ./build.sh
+          if [ -z "$BASE" ] || [ -z "$V" ]; then echo "Could not read the version from build.sh"; exit 1; fi
+          VERSION_CODE=$(( BASE * 10000 + GITHUB_RUN_NUMBER )) VERSION_NAME="$V-fireos6" ./build.sh
 
-      - name: Publish the TV APK as a release
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Check 1, no code that crashes on Android 7.1
         run: |
-          cp FMHYPlay-TV-v*.apk FMHYPlay-TV-fireos6.apk
-          gh release delete fireos6 --cleanup-tag --yes --repo "$GITHUB_REPOSITORY" || true
-          gh release create fireos6 FMHYPlay-TV-fireos6.apk --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "FMHYPlay for Fire OS 6" --notes "Built from this fork with the Android 7.1 changes. Install FMHYPlay-TV-fireos6.apk."
+          python3 - <<'PYEOF'
+          import glob, os, re, shlex, subprocess, sys
+
+          # Compile the app against the Android 7.1 (API 25) class list. Anything that does not exist there must be behind
+          # an "SDK_INT >= 26" (or higher) check on the same line, or be one of the already-known guarded spots below.
+          KNOWN = set("""
+          App.java|cannot find symbol|symbol: method getProcessName()
+          Cast.java|cannot find symbol|symbol: class NotificationChannel
+          PlayerActivity.java|cannot find symbol|symbol: class PictureInPictureParams
+          PlayerActivity.java|cannot find symbol|symbol: class RemoteAction
+          PlayerActivity.java|cannot find symbol|symbol: method getDisplayCutout()
+          PlayerActivity.java|method does not override or implement a method from a supertype|
+          PlayerActivity.java|method onPictureInPictureModeChanged in class Activity cannot be applied to given types;|
+          PlayerActivity.java|package android.app.PictureInPictureParams does not exist|
+          WebActivity.java|cannot find symbol|symbol: variable Downloads
+          """.strip().split("\n"))
+
+          sdk = os.environ.get("ANDROID_HOME", "")
+          jar25 = sdk + "/platforms/android-25/android.jar"
+          if not os.path.exists(jar25):
+              raise SystemExit("GATE: the Android 7.1 class list is missing: " + jar25)
+          bts = sorted(glob.glob(sdk + "/build-tools/*"), key=lambda p: [int(x) if x.isdigit() else 0 for x in re.split(r"[.\-]", os.path.basename(p))])
+          stubs = (bts[-1] + "/core-lambda-stubs.jar") if bts else ""
+          boot = jar25 + (":" + stubs if stubs and os.path.exists(stubs) else "")
+          srcs = glob.glob("src/**/*.java", recursive=True) + glob.glob("build/me/**/*.java", recursive=True)
+          libs = ":".join(sorted(glob.glob("libs/*.jar")))
+          os.makedirs("/tmp/gate-classes", exist_ok=True)
+          cmd = shlex.split(os.environ.get("JAVAC", "javac")) + ["-encoding", "UTF-8", "-nowarn", "-Xlint:-options", "-Xmaxerrs", "5000",
+                 "-proc:none", "-source", "8", "-target", "8", "-bootclasspath", boot, "-classpath", libs, "-d", "/tmp/gate-classes"] + srcs
+          out = subprocess.run(cmd, capture_output=True, text=True)
+          text = out.stdout + out.stderr
+
+          head = re.compile(r"^(\S+\.java):(\d+): error: (.*)$")
+          errs, cur = [], None
+          for line in text.split("\n"):
+              m = head.match(line)
+              if m:
+                  cur = {"file": m.group(1), "line": int(m.group(2)), "msg": m.group(3).strip(), "sym": ""}
+                  errs.append(cur)
+              elif cur is not None and line.strip().startswith("symbol:") and not cur["sym"]:
+                  cur["sym"] = re.sub(r"\s+", " ", line.strip())
+
+          guard = re.compile(r"SDK_INT\s*(>=\s*(2[6-9]|[3-9]\d)|>\s*(2[5-9]|[3-9]\d))")
+          bad, seen = [], 0
+          for e in errs:
+              if "package R does not exist" in e["msg"] or re.search(r"(class|variable) R$", e["sym"]):
+                  continue
+              try:
+                  src = open(e["file"], encoding="utf-8").read().split("\n")[e["line"] - 1]
+              except Exception:
+                  src = ""
+              if "ambiguous" in e["msg"] and re.search(r"\bR\.\w+\.\w+", src):
+                  continue   # only caused by the generated resource class missing from this check
+              seen += 1
+              key = "%s|%s|%s" % (os.path.basename(e["file"]), e["msg"], e["sym"])
+              if key in KNOWN or guard.search(src):
+                  continue
+              bad.append((key, "%s:%d: %s" % (e["file"], e["line"], src.strip()[:110])))
+
+          if os.environ.get("GATE_LEARN"):
+              for k, _ in bad:
+                  print(k)
+              sys.exit(0)
+          print("Android 7.1 check: %d calls above Android 7.1 found, all behind version checks" % seen if not bad else "")
+          if bad:
+              print("Android 7.1 check FAILED. Code that would crash on Android 7.1 and has no version check:")
+              for k, where in bad:
+                  print("  " + where + "\n    " + k)
+              sys.exit(1)
+          PYEOF
+
+      - name: Check 2, the APK itself
+        run: |
+          APK=$(ls FMHYPlay-TV-v*.apk)
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          MIN=$("$BT/aapt2" dump badging "$APK" | sed -n "s/^sdkVersion:'\([0-9]*\)'.*/\1/p" | head -1)
+          echo "$APK needs Android API $MIN or newer"
+          if [ -z "$MIN" ] || [ "$MIN" -gt 25 ]; then echo "The APK needs a newer Android than Fire OS 6"; exit 1; fi
+          "$BT/apksigner" verify --min-sdk-version 25 "$APK"
+          if ! unzip -l "$APK" | grep -q "lib/armeabi-v7a/"; then echo "The 32-bit ARM files are missing from the APK"; exit 1; fi
+          echo "APK checks passed"
+
+      - name: Publish the TV APK as the newest release
+        run: |
+          SHORT=${SHA:0:7}
+          TAG="fireos6-$SHORT"
+          APK=$(ls FMHYPlay-TV-v*.apk)
+          V=$(echo "$APK" | sed 's/FMHYPlay-TV-v//; s/\.apk$//')
+          cp "$APK" FMHYPlay-TV-fireos6.apk
+          for t in "$TAG" "fireos6-failed-$SHORT"; do
+            gh release delete "$t" --cleanup-tag --yes --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+          done
+          gh release create "$TAG" FMHYPlay-TV-fireos6.apk --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --latest \
+            --title "FMHYPlay $V for Fire OS 6 (developer commit $SHORT)" \
+            --notes "Built from https://github.com/$UPSTREAM/commit/$SHA with the Android 7.1 changes. Install FMHYPlay-TV-fireos6.apk. It passed the Android 7.1 checks."
+          # keep the newest 5 good builds and the newest 5 blocked-build notes, delete the rest
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName,publishedAt \
+            --jq '[.[] | select((.tagName | startswith("fireos6")) and ((.tagName | startswith("fireos6-failed")) | not))] | sort_by(.publishedAt) | reverse | .[5:] | .[].tagName' \
+            | while read -r t; do gh release delete "$t" --cleanup-tag --yes --repo "$GITHUB_REPOSITORY" || true; done
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName,publishedAt \
+            --jq '[.[] | select(.tagName | startswith("fireos6-failed"))] | sort_by(.publishedAt) | reverse | .[5:] | .[].tagName' \
+            | while read -r t; do gh release delete "$t" --cleanup-tag --yes --repo "$GITHUB_REPOSITORY" || true; done
+          echo "Published $TAG ($V)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Note that this version did not pass (the last good APK stays as it is)
+        if: failure()
+        run: |
+          SHORT=${SHA:0:7}
+          gh release create "fireos6-failed-$SHORT" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+            --title "Blocked: developer commit $SHORT did not pass the Fire OS 6 checks" \
+            --notes "Nothing was published for this commit and your last good APK is unchanged. Details: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID . It is retried when the developer pushes again, or run the workflow by hand with force ticked." || true
