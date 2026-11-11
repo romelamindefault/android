@@ -130,4 +130,5 @@
     <string name="iptv_unpin">अनपिन करें</string>
     <string name="iptv_pinned">पिन किया: %1$s</string>
     <string name="iptv_unpinned">अनपिन किया: %1$s</string>
+    <string name="title_trailer">ट्रेलर</string>
 </resources>

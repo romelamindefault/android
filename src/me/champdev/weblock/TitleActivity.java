@@ -15,7 +15,8 @@ import java.util.List;
 /** One movie or series: poster, details, episodes by season, and Watch on the site you picked (its search box is filled in for you). */
 public class TitleActivity extends Home {
     final Catalog.Title t = new Catalog.Title();
-    int season = 1;
+    static final int PAGE = 50;
+    int season = 1, shownEps = PAGE;
     boolean refocus = true;   // TV: land on Watch when the screen first appears, not after every season click
 
     @Override boolean tabs() { return false; }
@@ -27,6 +28,8 @@ public class TitleActivity extends Home {
         t.year = String.valueOf(getIntent().getStringExtra("year"));
         t.poster = String.valueOf(getIntent().getStringExtra("poster"));
         t.anime = getIntent().getBooleanExtra("anime", false);
+        if (getIntent().getStringExtra("tmdb") != null) t.tmdb = getIntent().getStringExtra("tmdb");
+        if (t.name == null) t.name = "";
         super.onCreate(state);
         App.io.execute(() -> {
             Catalog.fill(t);
@@ -40,7 +43,7 @@ public class TitleActivity extends Home {
     }
 
     @Override protected void onResume() {
-        refocus = true;
+        refocus = focusKey == null && focusPath == null;   // back from a site: the focus returns to the card it left (Home.restoreFocus), not to Watch
         super.onResume();
     }
 
@@ -53,7 +56,7 @@ public class TitleActivity extends Home {
         FrameLayout poster = new FrameLayout(this);
         poster.setBackground(rounded(colorFor(t.name), dp(12)));
         poster.setClipToOutline(true);
-        TextView letter = text(t.name.substring(0, 1).toUpperCase(), 40, 0x55FFFFFF, true);
+        TextView letter = text(t.name.isEmpty() ? "?" : t.name.substring(0, 1).toUpperCase(), 40, 0x55FFFFFF, true);
         letter.setGravity(Gravity.CENTER);
         poster.addView(letter, new FrameLayout.LayoutParams(-1, -1));
         ImageView img = new ImageView(this);
@@ -89,11 +92,31 @@ public class TitleActivity extends Home {
             info.addView(overview);
         }
         hero.addView(info, new LinearLayout.LayoutParams(0, -2, 1));
-        col.addView(hero);
+        // The title's wide picture runs edge to edge behind the top of the page and fades into it
+        FrameLayout top = new FrameLayout(this);
+        String art = Catalog.backdrop(t);
+        int lead = col.getPaddingTop() + (art.isEmpty() ? 0 : u(10, 10));   // room above the poster
+        int tall = lead + dp(w * 3 / 2) + u(8, 6);   // the picture is as tall as the poster and its margins, no more
+        if (!art.isEmpty()) {
+            ImageView back = new ImageView(this);
+            back.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            top.addView(back, new FrameLayout.LayoutParams(-1, tall));
+            loadImage(back, art, null, 1280);
+            int clear = BG & 0xFFFFFF;
+            View fade = new View(this);
+            fade.setBackground(new android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{clear | 0x80000000, clear | 0xB3000000, BG}));
+            top.addView(fade, new FrameLayout.LayoutParams(-1, tall));
+        }
+        hero.setPadding(side, lead, side, 0);
+        top.addView(hero);
+        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-1, -2);
+        tl.setMargins(-side, -col.getPaddingTop(), -side, 0);
+        col.addView(top, tl);
 
         if (!App.tv && !t.overview.isEmpty()) {
             TextView overview = text(t.overview, 13, TEXT, false);
-            overview.setPadding(0, dp(12), 0, 0);
+            overview.setPadding(0, dp(6), 0, dp(2));
             col.addView(overview);
         }
         // Who made it and who is in it, where it is from, awards, and for a series whether it still runs and how much there is
@@ -111,23 +134,23 @@ public class TitleActivity extends Home {
         if (!facts.isEmpty()) {
             LinearLayout box = new LinearLayout(this);
             box.setOrientation(LinearLayout.VERTICAL);
-            box.setPadding(0, u(14, 10), 0, 0);
+            box.setPadding(0, u(12, 8), 0, 0);
             for (String[] f : facts) {
                 android.text.SpannableStringBuilder fact = new android.text.SpannableStringBuilder(f[0] + "   ");
                 fact.setSpan(new android.text.style.ForegroundColorSpan(MUTED), 0, f[0].length(), 0);
                 fact.append(f[1]);
-                TextView v = text("", sp(15, 13), TEXT, false);
+                TextView v = text("", sp(14, 12), TEXT, false);
                 v.setText(fact);
                 v.setMaxLines(2);
                 v.setEllipsize(TextUtils.TruncateAt.END);
-                v.setPadding(0, dp(3), 0, dp(3));
+                v.setPadding(0, dp(2), 0, dp(2));
                 box.addView(v);
             }
-            col.addView(box);
+            info.addView(box);   // beside the poster, not a block of its own under it
         }
 
         LinearLayout buttons = new LinearLayout(this);
-        buttons.setPadding(0, u(18, 12), 0, u(4, 2));
+        buttons.setPadding(0, u(4, 2), 0, 0);
         Sites.Site site = chosen();
         TextView watch = chip(v -> watch(null));
         watch.setText(site == null ? App.t(R.string.title_no_site) : App.t(R.string.title_watch_on, site.name));
@@ -140,9 +163,22 @@ public class TitleActivity extends Home {
         list.setOnClickListener(v -> { toast(App.t(Catalog.toggleMine(t) ? R.string.title_added : R.string.title_removed)); build(); });
         buttons.addView(watch);
         buttons.addView(list);
+        if (t.trailer.matches("[\\w-]{6,20}")) {   // the YouTube app when there is one, else YouTube's page in the app
+            TextView trailer = chip(v -> {
+                String link = "https://www.youtube.com/watch?v=" + t.trailer;
+                try {
+                    startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(link)));
+                } catch (android.content.ActivityNotFoundException e) {
+                    startActivity(WebActivity.open(this, "YouTube", "https://www.youtube.com", link));
+                }
+            });
+            trailer.setText(App.t(R.string.title_trailer));
+            buttons.addView(trailer);
+        }
         android.widget.HorizontalScrollView scroller = new android.widget.HorizontalScrollView(this);
         scroller.setHorizontalScrollBarEnabled(false);
         scroller.setClipToPadding(false);
+        scroller.setClipChildren(false);
         LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(-1, -2);
         slp.setMargins(-slack, 0, -slack, 0);
         scroller.setLayoutParams(slp);
@@ -156,12 +192,20 @@ public class TitleActivity extends Home {
         List<Sites.Site> sites = options();
         if (!sites.isEmpty()) {
             // one row that scrolls sideways, so the episodes below are a short move away
-            col.addView(heading(App.t(R.string.title_watch_heading, t.name)));
-            LinearLayout row = row();
-            for (Sites.Site s : sites) row.addView(siteCard(s, true));
+            // Just "Watch on": the old line also spelled out "tap a site to open <title>", which ran long and wrapped
+            col.addView(heading(App.t(R.string.title_watch_heading, "").split("\u00B7")[0].trim()));
+            if (App.tv || t.series()) {   // a series keeps the sites to one sideways row: its episodes come right after
+                LinearLayout row = row();
+                for (Sites.Site s : sites) row.addView(siteCard(s, true));
+            } else {
+                // A movie on a phone: the page scrolls down, not sideways, so two across
+                Grid grid = new Grid(col);
+                for (Sites.Site s : sites) grid.add(s);
+                cardW = 156;
+            }
         }
         if (t.series() && !t.episodes.isEmpty()) episodes();
-        if (App.tv && refocus) col.postDelayed(watch::requestFocus, 60);
+        if (App.tv && refocus && !watch.requestFocus()) col.post(watch::requestFocus);
         refocus = false;
     }
 
@@ -171,7 +215,7 @@ public class TitleActivity extends Home {
         seasons.setClipChildren(false);
         for (int s = 1; s <= Catalog.seasons(t); s++) {
             final int n = s;
-            TextView c = chip(v -> { season = n; build(); });
+            TextView c = chip(v -> { season = n; shownEps = PAGE; build(); });
             c.setText(App.t(R.string.title_season, s));
             c.setTextColor(s == season ? 0xFFFFFFFF : TEXT);
             c.setBackground(rounded(s == season ? ACCENT : CARD, dp(22)));
@@ -181,6 +225,7 @@ public class TitleActivity extends Home {
         android.widget.HorizontalScrollView sc = new android.widget.HorizontalScrollView(this);
         sc.setHorizontalScrollBarEnabled(false);
         sc.setClipToPadding(false);
+        sc.setClipChildren(false);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
         lp.setMargins(-slack, 0, -slack, 0);
         sc.setLayoutParams(lp);
@@ -188,8 +233,12 @@ public class TitleActivity extends Home {
         sc.addView(seasons);
         col.addView(sc);
 
+        // A page of episodes at a time: a daily soap has 2000 in one season, and a row (with its picture) for each ran the device out of memory
+        int shown = 0, inSeason = 0;
+        for (Catalog.Episode e : t.episodes) if (e.season == season) inSeason++;
         for (Catalog.Episode e : t.episodes) {
             if (e.season != season) continue;
+            if (shown++ == shownEps) break;
             LinearLayout row = new LinearLayout(this);
             row.setGravity(Gravity.CENTER_VERTICAL);
             row.setPadding(u(12, 8), u(10, 7), u(14, 10), u(10, 7));
@@ -197,7 +246,7 @@ public class TitleActivity extends Home {
             thumb.setScaleType(ImageView.ScaleType.CENTER_CROP);
             thumb.setBackground(rounded(colorFor(e.title), dp(8)));
             thumb.setClipToOutline(true);
-            if (!e.thumb.isEmpty()) loadImage(thumb, e.thumb, null);
+            if (!e.thumb.isEmpty()) loadImage(thumb, e.thumb, null, dp(App.tv ? 160 : 100));
             row.addView(thumb, new LinearLayout.LayoutParams(dp(App.tv ? 160 : 100), dp(App.tv ? 90 : 56)));
             LinearLayout text = new LinearLayout(this);
             text.setOrientation(LinearLayout.VERTICAL);
@@ -221,6 +270,15 @@ public class TitleActivity extends Home {
             focusable(row, dp(14));
             row.setOnClickListener(v -> watch(e));
             col.addView(row);
+        }
+        if (inSeason > shownEps) {
+            TextView more = text(App.t(R.string.home_load_more) + "  (" + (inSeason - shownEps) + ")", sp(15, 14), TEXT, true);
+            more.setGravity(Gravity.CENTER);
+            more.setPadding(0, dp(13), 0, dp(13));
+            more.setBackground(rounded(CARD, dp(14)));
+            focusable(more, dp(14));
+            more.setOnClickListener(v -> { int y = page.getScrollY(); shownEps += PAGE; build(); page.post(() -> page.scrollTo(0, y)); });
+            col.addView(more);
         }
     }
 
@@ -263,7 +321,7 @@ public class TitleActivity extends Home {
 
     @Override void openSite(Sites.Site s) {
         App.prefs.edit().putString(siteKey(), s.url).apply();
-        startActivity(withTitle(titleIntent(s)));
+        watch(null);   // the same as Watch, on the site just picked: a series starts its first episode, with the loading screen
     }
 
     // The title's own page when the site is known (by TMDB id), else the site with a search for its name
@@ -277,7 +335,8 @@ public class TitleActivity extends Home {
         Sites.Site s = chosen();
         if (s == null) { toast(App.t(R.string.title_no_site_toast)); return; }
         // A site that has episode pages but no page for the show (most anime sites): Watch starts the first episode
-        if (e == null && t.series() && Sites.deeplink(s.url, t) == null && Sites.hasLink(s.url, t.anime ? "anime" : "episode"))
+        // Watch on a series starts its first episode (with the loading screen while the app finds and plays it), on every site
+        if (e == null && t.series())
             for (Catalog.Episode x : t.episodes) if (e == null || x.season < e.season || (x.season == e.season && x.number < e.number)) e = x;
         startActivity(withTitle(titleIntent(s))
             .putExtra("season", e == null ? 0 : e.season).putExtra("episode", e == null ? 0 : e.number));

@@ -45,14 +45,14 @@ Streaming sites are built for a desktop browser with a mouse. On a TV remote the
 <p align="center"><img src="docs/cast.svg" alt="Cast from the phone to a TV on the same Wi-Fi" width="760"></p>
 
 **Series and anime**
-- **Episodes** list in the player (seasons, stills, names), **Previous** and **Next**, and the next episode starts by itself
+- **Episodes** strip in the player (stills and names along the bottom while the video plays), **Previous** and **Next**, and the next episode starts by itself
 - **Skip intro, recap and credits** (times from TheIntroDB and AniSkip), with a Next episode button at the credits; *Settings, Skip intros* skips them for you
 - **Sub / Dub** button for anime, remembered per site
 - Opens the exact episode directly on 34 TV sites and 22 anime sites; elsewhere it presses the episode in the site's own list or menus
 
 **FMHYPlayer**
 - Hands off automatically when a page starts an HLS, DASH or live FLV stream; falls back to the page if the stream cannot be played
-- One row of icon buttons: Previous, Next, Quality, Audio, Sub / Dub, Episodes, Servers, Subtitles, More, Cast, Full screen; what is picked shows under the title, and on a TV the button the remote is on shows its name
+- Icon buttons in two groups: Previous, Next, Episodes on the left; Quality, Audio, Sub / Dub, Servers, Subtitles, More, Cast, Full screen on the right; menus open as a side panel; what is picked shows under the title, and on a TV the button the remote is on shows its name
 - Replays the page's Referer, Origin and cookies, so streams that check them still play
 - **Resumes where you stopped on any site or server**, with a Restart button; the place is saved every 10 seconds while you watch, and the subtitles you had on come back
 - Quality list with frame rate (for example 1080p60), audio and subtitle tracks, speed and zoom modes
@@ -66,7 +66,8 @@ Streaming sites are built for a desktop browser with a mouse. On a TV remote the
 - A translucent **loading screen** (title, current step, a cat that spins while it works, jumps when the stream is found and stares when it gets stuck) while the app drives a site, until the player is up; tap it or press Back to see the page
 
 **Browsing**
-- Home with Continue watching, Favorites, and **New and Popular** for Movies, TV and Anime (from Cinemeta and Kitsu)
+- Home with Continue watching, Favorites, **your country's movies and series first** (by language, from TMDB), then **New and Popular** for Movies, TV and Anime (from Cinemeta and Kitsu)
+- A side rail on a TV, bottom tabs on a phone; pull down to refresh; trailers on title pages
 - **One search** for movies, series, IPTV channels and sites, by typing or by voice
 - A directory of streaming sites that tracks the [FMHY](https://github.com/fmhy/edit) lists; opens a title's own page on about 70 sites and searches the rest for you, then opens the match
 - Anime opens on anime sites only
@@ -83,7 +84,8 @@ Streaming sites are built for a desktop browser with a mouse. On a TV remote the
 
 **IPTV**
 - More than 11,000 public channels from [iptv-org](https://github.com/iptv-org/iptv), grouped by category and country, with logos
-- A background check hides channels that are offline, and a Working row shows the ones that played
+- A background check hides channels that are offline; your country's channels and its categories come first
+- In the player: **Channel + / −**, Previous / Next and a **Channels strip** move through the channel's category
 - **Add your own playlist, a single `.m3u8` stream link, an Xtream Codes login or a Stalker portal (MAC address)**; each playlist gets its own row
 - **Category and Language filters** in every channel list, and **pins**: keep a list with its filters (India · News · Hindi) as its own row
 - Favorite channels with a heart; channels also show up in the one search
@@ -118,7 +120,7 @@ Streaming sites are built for a desktop browser with a mouse. On a TV remote the
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/phone-episodes.jpg" alt="Episodes list in the player" height="420">
+  <img src="docs/screenshots/phone-iptv.jpg" alt="IPTV on a phone" height="420">
 </p>
 
 ## Install

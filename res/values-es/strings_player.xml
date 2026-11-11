@@ -120,4 +120,6 @@
     <string name="player_sub_dub">Subtitulado / Doblado: %1$s</string>
     <string name="player_home">Inicio</string>
     <string name="player_more">Más</string>
+    <string name="player_channels">Canales</string>
+    <string name="player_more_watch">Más para ver</string>
 </resources>

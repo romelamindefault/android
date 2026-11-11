@@ -524,11 +524,14 @@ public class WebActivity extends Activity {
             status.setVisibility(View.GONE);
             if (opening.getVisibility() == View.VISIBLE) step("load", App.t(R.string.web_step_loading), null);
             if (Warp.state == Warp.State.FAILED) toast(App.t(R.string.web_warp_failed));
-            Warp.route(!Warp.bypassed(siteOf(String.valueOf(Uri.parse(siteUrl).getHost()))));
-            int sn = getIntent().getIntExtra("season", 0), en = getIntent().getIntExtra("episode", 0);
-            if (show != null && show.series() && en > 0) openEpisode(Math.max(1, sn), en, url);
-            else web.loadUrl(url);
-            web.requestFocus();
+            // The page loads once the route is really set (it is set here, not at app start)
+            Warp.route(!Warp.bypassed(siteOf(String.valueOf(Uri.parse(siteUrl).getHost()))), () -> {
+                if (isFinishing() || isDestroyed()) return;
+                int sn = getIntent().getIntExtra("season", 0), en = getIntent().getIntExtra("episode", 0);
+                if (show != null && show.series() && en > 0) openEpisode(Math.max(1, sn), en, url);
+                else web.loadUrl(url);
+                web.requestFocus();
+            });
         });
     }
 

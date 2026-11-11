@@ -120,4 +120,6 @@
     <string name="player_sub_dub">Sub / Dub: %1$s</string>
     <string name="player_home">Home</string>
     <string name="player_more">More</string>
+    <string name="player_channels">Channels</string>
+    <string name="player_more_watch">More to watch</string>
 </resources>

@@ -217,4 +217,18 @@
     <string name="home_group_my_playlists">Meine Playlists</string>
     <string name="home_group_other">Sonstige</string>
     <string name="home_group_live">Live</string>
+    <string name="home_region">Dein Land</string>
+    <string name="home_region_help">Filme und Serien aus deinem Land stehen auf Start zuerst.</string>
+    <string name="home_warp_off_title">WARP ausschalten?</string>
+    <string name="home_warp_off_msg">Seiten sehen deine echte Adresse, und von deinem Anbieter gesperrte Seiten laden vielleicht nicht mehr.</string>
+    <string name="home_turn_off">Ausschalten</string>
+    <string name="home_clear_web">Website-Daten löschen</string>
+    <string name="home_clear_web_help">Cookies, Logins, Cache und gespeicherte Daten aller Seiten.</string>
+    <string name="home_web_cleared">Website-Daten gelöscht</string>
+    <string name="home_donate">Spenden</string>
+    <string name="home_donate_help">FMHYPlay ist kostenlos, ohne Werbung und ohne Konto. Wenn es dir Zeit spart, kannst du die Entwicklung unterstützen.</string>
+    <string name="home_about">Über die App</string>
+    <string name="home_about_site">Website</string>
+    <string name="home_about_source">Quellcode</string>
+    <string name="home_about_bug">Problem melden</string>
 </resources>

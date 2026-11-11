@@ -217,4 +217,18 @@
     <string name="home_group_my_playlists">मेरी प्लेलिस्ट</string>
     <string name="home_group_other">अन्य</string>
     <string name="home_group_live">लाइव</string>
+    <string name="home_region">आपका देश</string>
+    <string name="home_region_help">आपके देश की फ़िल्में और सीरीज़ होम पर सबसे पहले आती हैं।</string>
+    <string name="home_warp_off_title">WARP बंद करें?</string>
+    <string name="home_warp_off_msg">साइटें आपका असली पता देखेंगी, और आपके प्रोवाइडर की ब्लॉक की हुई साइटें खुलना बंद हो सकती हैं।</string>
+    <string name="home_turn_off">बंद करें</string>
+    <string name="home_clear_web">वेबसाइट डेटा साफ़ करें</string>
+    <string name="home_clear_web_help">हर साइट की कुकीज़, लॉगिन, कैश और सेव किया डेटा।</string>
+    <string name="home_web_cleared">वेबसाइट डेटा साफ़ हो गया</string>
+    <string name="home_donate">दान करें</string>
+    <string name="home_donate_help">FMHYPlay मुफ़्त है, बिना विज्ञापन और बिना अकाउंट के। अगर यह आपका समय बचाता है, तो आप इसके विकास में मदद कर सकते हैं।</string>
+    <string name="home_about">ऐप के बारे में</string>
+    <string name="home_about_site">वेबसाइट</string>
+    <string name="home_about_source">सोर्स कोड</string>
+    <string name="home_about_bug">समस्या बताएं</string>
 </resources>

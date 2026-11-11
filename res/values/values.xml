@@ -1,7 +1,18 @@
 <resources>
     <color name="icon_bg">#1A1423</color>
+    <color name="app_bg">#0E0C13</color>
     <style name="AppTheme" parent="@android:style/Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@color/icon_bg</item>
+        <item name="android:windowBackground">@color/app_bg</item>
         <item name="android:colorAccent">#FF3B5C</item>
+        <item name="android:alertDialogTheme">@style/Dialog</item>
+    </style>
+    <!-- Dialogs in the app's own ink, not Material's grey -->
+    <style name="Dialog" parent="@android:style/Theme.Material.Dialog.Alert">
+        <item name="android:colorBackground">#1A1721</item>
+        <item name="android:colorBackgroundFloating">#1A1721</item>
+        <item name="android:colorAccent">#FF3B5C</item>
+        <item name="android:textColorPrimary">#F4F2F7</item>
+        <item name="android:textColorSecondary">#9690A3</item>
+        <item name="android:dialogCornerRadius">18dp</item>
     </style>
 </resources>

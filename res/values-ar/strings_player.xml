@@ -120,4 +120,6 @@
     <string name="player_sub_dub">مترجم / مدبلج: %1$s</string>
     <string name="player_home">الرئيسية</string>
     <string name="player_more">المزيد</string>
+    <string name="player_channels">القنوات</string>
+    <string name="player_more_watch">المزيد للمشاهدة</string>
 </resources>

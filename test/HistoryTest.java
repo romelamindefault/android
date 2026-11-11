@@ -10,6 +10,11 @@ public class HistoryTest {
     }
 
     public static void main(String[] a) {
+        // a long number is an id, not an episode: no crash (it used to overflow an int), no episode
+        check("huge episode id in the address", History.episode("https://x.tv/watch/episode-20261110123456", "Show"), "");
+        check("huge episode number in the title", History.episode("https://x.tv/w", "Show Episode 99999999999"), "");
+        check("huge season/episode query", History.episode("https://x.tv/w?s=99999999999&e=99999999999", "Show"), "");
+        check("normal episode address still read", History.episode("https://x.tv/anime-1535-episode-3", "Show"), "E3");
         check("anime page", History.episodeUrl("https://animex.one/watch/anime-1535-episode-3", 3, 4), "https://animex.one/watch/anime-1535-episode-4");
         check("padding kept, query kept", History.episodeUrl("https://x.com/watch/show-ep-03?x=1", 3, 10), "https://x.com/watch/show-ep-10?x=1");
         check("the last one is swapped", History.episodeUrl("https://x.com/season-3/episode-3", 3, 4), "https://x.com/season-3/episode-4");

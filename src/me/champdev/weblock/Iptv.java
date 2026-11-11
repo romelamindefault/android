@@ -784,6 +784,23 @@ final class Iptv {
         saveHealth();
     }
 
+    /**
+     * The channels that go with one (by its address): the same first category in the same country, or the same playlist and group for one
+     * of yours; in list order, the channel itself among them. Empty when it is not in the lists. For the player's channel list and +/- keys.
+     */
+    static List<Channel> siblings(String url) {
+        List<Channel> out = new ArrayList<>();
+        Channel me = null;
+        for (Channel c : all()) if (c.url.equals(url)) { me = c; break; }
+        if (me == null) return out;
+        boolean own = me.cats[0].equals(MINE);
+        for (Channel c : all()) {
+            if (!c.cats[0].equals(me.cats[0])) continue;
+            if (own ? c.playlist.equals(me.playlist) && c.group.equals(me.group) : c.country.equals(me.country)) out.add(c);
+        }
+        return out;
+    }
+
     static void play(android.content.Context ctx, Channel c) {
         List<Channel> h = new ArrayList<>(history());
         h.removeIf(x -> x.url.equals(c.url));

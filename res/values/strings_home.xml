@@ -217,4 +217,18 @@
     <string name="home_group_my_playlists">My playlists</string>
     <string name="home_group_other">Other</string>
     <string name="home_group_live">Live</string>
+    <string name="home_region">Your country</string>
+    <string name="home_region_help">Movies and series from your country come first on Home.</string>
+    <string name="home_warp_off_title">Turn WARP off?</string>
+    <string name="home_warp_off_msg">Sites will see your real address, and sites your provider blocks may stop loading.</string>
+    <string name="home_turn_off">Turn off</string>
+    <string name="home_clear_web">Clear website data</string>
+    <string name="home_clear_web_help">Cookies, logins, cache and saved data of every site.</string>
+    <string name="home_web_cleared">Website data cleared</string>
+    <string name="home_donate">Donate</string>
+    <string name="home_donate_help">FMHYPlay is free, with no ads and no account. If it saves you time, you can support its development.</string>
+    <string name="home_about">About</string>
+    <string name="home_about_site">Website</string>
+    <string name="home_about_source">Source code</string>
+    <string name="home_about_bug">Report a problem</string>
 </resources>

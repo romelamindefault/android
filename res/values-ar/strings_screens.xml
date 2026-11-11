@@ -130,4 +130,5 @@
     <string name="iptv_unpin">إلغاء التثبيت</string>
     <string name="iptv_pinned">تم التثبيت: %1$s</string>
     <string name="iptv_unpinned">تم إلغاء التثبيت: %1$s</string>
+    <string name="title_trailer">الإعلان</string>
 </resources>

@@ -130,4 +130,5 @@
     <string name="iptv_unpin">Unpin</string>
     <string name="iptv_pinned">Pinned: %1$s</string>
     <string name="iptv_unpinned">Unpinned: %1$s</string>
+    <string name="title_trailer">Trailer</string>
 </resources>

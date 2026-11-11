@@ -39,10 +39,11 @@ adb install -r FMHYPlay-TV-vX.Y.Z.apk</code></pre>
 <p><b>Updates from inside the app</b> (2.14.0 and later): when a newer release is out, Home shows one line with an <i>Install</i> button. FMHYPlay downloads it from GitHub and Android asks you to confirm; the first time, allow FMHYPlay to install unknown apps. <i>Settings, Check for updates</i> looks right away, and <i>Check automatically</i> turns the automatic check off; it looks every hour and at every boot, even with the app closed.</p>
 
 <h2 id="browse">Browse and play</h2>
-<p>The tabs along the top (bottom on a phone) are <b>Home</b>, <b>Movies</b>, <b>TV</b>, <b>Sports</b>, <b>Anime</b>, <b>IPTV</b> and <b>Settings</b>.</p>
+<p>The tabs are <b>Home</b>, <b>Movies</b>, <b>TV</b>, <b>Sports</b>, <b>Anime</b> and <b>IPTV</b>: on a rail down the left side on a TV (with Search on top, and WARP and Settings at the foot), along the bottom on a phone (Search, WARP and Settings are in the bar on top). They stay on every screen; pressing one from a title page or a list goes Home on that tab. On a phone, pull down at the top of a tab to load it again.</p>
+<p><b>Your country first:</b> Home opens with Movies and TV rows from your country, and the Movies and TV tabs open on your first language with a chip for each (India: Hindi, Tamil, Telugu...). The country comes from the mobile network or the time zone; <i>Settings, Your country</i> changes it or turns it off.</p>
 <ul>
 <li><b>Sites</b> are the streaming sites from the FMHY lists, grouped by what they carry. Pick one to open it.</li>
-<li><b>Catalog rows</b> show what is popular. Pick a title, then <i>Watch on</i> a site: on about 70 sites it opens the title's own page (or the episode you picked), on the others it searches for the name and opens the match. Anime titles list anime sites only, and the sites that open episodes directly come first.</li>
+<li><b>Catalog rows</b> show what is new and popular. Pick a title (its page has a <i>Trailer</i> button), then <i>Watch on</i> a site; a series starts at its first episode unless you pick another from the list (50 at a time, <i>Load more</i> for the rest): on about 70 sites it opens the title's own page (or the episode you picked), on the others it searches for the name and opens the match. Anime titles list anime sites only, and the sites that open episodes directly come first.</li>
 <li><b>Continue watching</b> on Home brings back the last titles you opened.</li>
 <li>Hold <kbd>OK</kbd> (long-press on a phone) on a site for favorites and mirrors.</li>
 </ul>
@@ -67,7 +68,7 @@ adb install -r FMHYPlay-TV-vX.Y.Z.apk</code></pre>
 
 <h2 id="remote">TV remote</h2>
 <table><tr><th>Where</th><th>Key</th><th>What it does</th></tr>
-<tr><td rowspan="2">Menus</td><td>Arrows, <kbd>OK</kbd></td><td>Move and select; the tab row is above the first row</td></tr>
+<tr><td rowspan="2">Menus</td><td>Arrows, <kbd>OK</kbd></td><td>Move and select. <kbd>Left</kbd> from a page reaches the rail; <kbd>OK</kbd> on a tab opens it with the focus on its first card. <kbd>Up</kbd> and <kbd>Down</kbd> stay inside the page, and coming back from a video returns to the card you left</td></tr>
 <tr><td><kbd>Menu</kbd></td><td>Same as holding <kbd>OK</kbd>: favorites, mirrors, remove</td></tr>
 <tr><td rowspan="2">Sites</td><td>Arrows</td><td>Move a round cursor over the page (or the focus, in focus mode)</td></tr>
 <tr><td>Hold <kbd>OK</kbd> 5 s</td><td>Switch between cursor and focus mode for that site</td></tr>
@@ -99,7 +100,7 @@ adb install -r FMHYPlay-TV-vX.Y.Z.apk</code></pre>
 <tr><td>Quality</td><td>The qualities the stream offers (with frame rate, for example <code>1080p60</code>), or the site's own quality list for sites that serve one playlist per quality.</td></tr>
 <tr><td>Audio</td><td>The stream's audio tracks by language. The language you pick is remembered: the next videos start in it when they have it, otherwise in your device's language.</td></tr>
 <tr><td>SUB / DUB</td><td>Anime: switches between subtitled and dubbed in one press. The badge says which is playing, and each site remembers your pick.</td></tr>
-<tr><td>Episodes</td><td>The list of episodes: seasons across the top, each episode with its picture and name. The one playing is marked; pick another and it opens.</td></tr>
+<tr><td>Episodes</td><td>A strip of episodes along the bottom, each with its picture and name, while the video keeps playing. The one playing is marked; pick another and it opens. For a live channel the same button is <i>Channels</i> (the channel's category in its country), for a movie <i>More to watch</i>. <kbd>Down</kbd> from the buttons opens it too; the button again, <kbd>Back</kbd> or a tap outside closes it.</td></tr>
 <tr><td>Servers</td><td>The site's own servers (see below).</td></tr>
 <tr><td>Subtitles</td><td>The stream's subtitles, <i>Search subtitles</i>, and <i>Settings</i> (size, position, color, background, timing).</td></tr>
 <tr><td>More</td><td>Speed (0.5x to 2x), Volume boost (up to +12 dB), Dialog boost (clearer voices, off until you turn it on), Zoom (Fit, Fill, Stretch, 16:9, 4:3), Debug overlay and From the start. <i>Debug overlay</i> shows live numbers over the picture: size and frame rate, codec and whether the decoder is hardware or software, video and audio bitrate, network speed (last download, estimate, 30-second average, total), buffer, dropped frames, stream type and host, how long the video took to open, and memory. It stays on or off as you leave it.</td></tr>
@@ -151,9 +152,9 @@ adb install -r FMHYPlay-TV-vX.Y.Z.apk</code></pre>
 <p>PunchPlay sees when you start, pause and stop a movie or episode opened from Movies, TV or Anime, and marks it watched past 80%. Press <i>Settings, PunchPlay</i> again to disconnect. What is sent is listed on the <a href="privacy.html">privacy page</a>.</p>
 
 <h2 id="iptv">IPTV</h2>
-<p>The <b>IPTV</b> tab lists public channels by category and country.</p>
+<p>The <b>IPTV</b> tab starts with what you watched and your favorites, then your own playlists and pins, then your country's channels with its categories (News, Movies, Kids...), then every country and every category. In the player, <i>Previous</i> / <i>Next</i> and the remote's <kbd>Channel +</kbd> / <kbd>Channel −</kbd> move through the channel's category.</p>
 <ul>
-<li><b>Continue watching</b> and <b>Working</b> rows: the last channels you watched, and every channel that has played for you. Hold <kbd>OK</kbd> on a card to remove it or star it.</li>
+<li><b>Continue watching</b>: the last channels you watched. Hold <kbd>OK</kbd> on a card to remove it or star it. <b>Working channels</b> (every channel that has played or passed the check) is the first card under Categories.</li>
 <li><b>Offline channels are hidden.</b> A background check tests channels a few at a time and remembers the result (working for a week, not working for two days). A channel that fails when you press play is hidden at once. <i>Settings, Hide offline channels</i> turns this off and <i>Check channels now</i> tests everything again.</li>
 <li><b>Search</b> by typing or by voice, and filter inside any list by name.</li>
 <li><b>Category and Language chips</b> above every channel list: in <i>India</i>, for example, pick <i>News</i> and <i>Hindi</i>. Categories start with Movies, TV, Kids and News; languages with the one you use for audio, the country's main one and English.</li>

@@ -120,4 +120,6 @@
     <string name="player_sub_dub">Sub / Dub: %1$s</string>
     <string name="player_home">Beranda</string>
     <string name="player_more">Lainnya</string>
+    <string name="player_channels">Saluran</string>
+    <string name="player_more_watch">Tontonan lain</string>
 </resources>

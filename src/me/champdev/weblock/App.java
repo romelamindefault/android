@@ -24,6 +24,32 @@ public class App extends Application {
     /** UI text in the phone's or TV's language (res/values-xx/strings_*.xml, English otherwise), with format arguments. */
     static String t(int id, Object... args) { return args.length == 0 ? app.getString(id) : app.getString(id, args); }
 
+    /**
+     * The viewer's country ("IN"), "" when unknown or switched off in Settings: the mobile network's, else the time zone's
+     * (a TV has no SIM and its language is often English (US) anywhere), else the device language's.
+     */
+    static String region() {
+        String set = prefs.getString("region", "");
+        if (!set.isEmpty()) return set.equals("-") ? "" : set;
+        String c = "";
+        try {
+            android.telephony.TelephonyManager tm = app.getSystemService(android.telephony.TelephonyManager.class);
+            if (tm != null) c = tm.getNetworkCountryIso();
+            if ((c == null || c.isEmpty()) && tm != null) c = tm.getSimCountryIso();
+        } catch (RuntimeException ignored) { }
+        try {
+            if (c == null || c.isEmpty()) c = android.icu.util.TimeZone.getRegion(java.util.TimeZone.getDefault().getID());
+        } catch (RuntimeException ignored) { }   // a zone with no country (UTC)
+        if (c == null || c.length() != 2) c = java.util.Locale.getDefault().getCountry();
+        return c.toUpperCase(java.util.Locale.ROOT);
+    }
+
+    /** The system is nearly out of memory, or we left the screen: decoded pictures go, they are on disk. */
+    @Override public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+        if (level >= TRIM_MEMORY_RUNNING_CRITICAL) Home.images.evictAll();
+    }
+
     @Override public void onCreate() {
         super.onCreate();
         app = this;

@@ -217,4 +217,18 @@
     <string name="home_group_my_playlists">Playlist saya</string>
     <string name="home_group_other">Lainnya</string>
     <string name="home_group_live">Live</string>
+    <string name="home_region">Negara Anda</string>
+    <string name="home_region_help">Film dan serial dari negara Anda tampil lebih dulu di Beranda.</string>
+    <string name="home_warp_off_title">Matikan WARP?</string>
+    <string name="home_warp_off_msg">Situs akan melihat alamat asli Anda, dan situs yang diblokir penyedia Anda bisa berhenti dimuat.</string>
+    <string name="home_turn_off">Matikan</string>
+    <string name="home_clear_web">Hapus data situs</string>
+    <string name="home_clear_web_help">Cookie, login, cache, dan data tersimpan semua situs.</string>
+    <string name="home_web_cleared">Data situs dihapus</string>
+    <string name="home_donate">Donasi</string>
+    <string name="home_donate_help">FMHYPlay gratis, tanpa iklan dan tanpa akun. Jika menghemat waktu Anda, Anda bisa mendukung pengembangannya.</string>
+    <string name="home_about">Tentang</string>
+    <string name="home_about_site">Situs web</string>
+    <string name="home_about_source">Kode sumber</string>
+    <string name="home_about_bug">Laporkan masalah</string>
 </resources>

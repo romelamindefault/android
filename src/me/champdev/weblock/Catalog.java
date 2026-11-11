@@ -42,6 +42,7 @@ final class Catalog {
         String tmdb = "";   // TheMovieDB id (Cinemeta meta only): many sites key their pages by it
         String id = "", type = "movie", name = "", year = "", rating = "", poster = "", background = "", overview = "", runtime = "", genres = "";
         String cast = "", director = "", writer = "", country = "", awards = "", status = "";   // from the detail page
+        String trailer = "";   // YouTube id (detail page)
         String released = "";   // "2026-10-02T00:00:00.000Z": cinema release for a movie, first episode for a series
         boolean anime;   // set by search, from Kitsu's anime list
         final List<Episode> episodes = new ArrayList<>();
@@ -53,6 +54,8 @@ final class Catalog {
 
     /** One catalog page. type = movie|series; extra = "" | "genre=Comedy" | "skip=50" | "search=text". Null when offline with nothing cached. */
     static List<Title> list(String type, String extra) {
+        if (extra.startsWith("local=")) return local(type, extra.substring(6), false);
+        if (extra.startsWith("genre=" + LANG)) return language(type, extra.substring(6 + LANG.length()), false);
         if (extra.equals(NEW_ANIME)) return newAnime(false);
         if (extra.equals(TRENDING_ANIME)) return kitsu("kitsu-anime-trending", new int[]{0}, 0, false);
         if (extra.startsWith("genre=" + POPULAR_ANIME)) return popularAnime(extra, false);
@@ -165,8 +168,111 @@ final class Catalog {
         return ids;
     }
 
+    // ---- local titles: TMDB's lists by original language, through the public Stremio TMDB addon (no key) ----
+
+    static final String TMDB = "https://tmdb.elfhosted.com";
+    /** A genre chip that is a language list: LANG + the addon's language name ("lang:Hindi"). */
+    static final String LANG = "lang:";
+    // ponytail: language stands in for country (Spain also gets Mexican films); a per-country list needs a TMDB key
+    static final String[] LOCAL = {"IN=Hindi,Tamil,Telugu,Malayalam,Kannada,Bengali,Marathi,Punjabi", "PK=Urdu,Punjabi", "BD=Bengali", "LK=Sinhalese,Tamil",
+        "NP=Nepali,Hindi", "JP=Japanese", "KR=Korean", "CN=Mandarin", "TW=Mandarin", "HK=Mandarin", "SG=Mandarin,Malay,Tamil", "TH=Thai", "VN=Vietnamese",
+        "ID=Indonesian", "MY=Malay,Mandarin,Tamil", "PH=Tagalog", "TR=Turkish", "IR=Persian", "IL=Hebrew", "SA=Arabic", "AE=Arabic", "EG=Arabic", "MA=Arabic,French",
+        "DZ=Arabic,French", "TN=Arabic,French", "IQ=Arabic,Kurdish", "JO=Arabic", "KW=Arabic", "QA=Arabic", "LB=Arabic", "SY=Arabic", "RU=Russian", "UA=Ukrainian",
+        "BY=Belarusian,Russian", "KZ=Kazakh,Russian", "UZ=Uzbek", "GE=Georgian", "AM=Armenian", "PL=Polish", "CZ=Czech", "SK=Slovak", "HU=Hungarian", "RO=Romanian",
+        "BG=Bulgarian", "GR=Greek", "RS=Serbian", "HR=Croatian", "SI=Slovenian", "AL=Albanian", "DE=German", "AT=German", "CH=German,French,Italian", "FR=French",
+        "BE=French,Dutch", "NL=Dutch", "IT=Italian", "ES=Spanish,Catalan", "MX=Spanish", "AR=Spanish", "CO=Spanish", "CL=Spanish", "PE=Spanish", "VE=Spanish",
+        "PT=Portuguese", "BR=Portuguese", "SE=Swedish", "NO=Norwegian", "DK=Danish", "FI=Finnish", "EE=Estonian", "LV=Latvian", "LT=Lithuanian", "ZA=Afrikaans,Zulu",
+        "KE=Swahili", "TZ=Swahili", "SO=Somali"};
+
+    /** The languages a country's own films and series are made in ("IN" -> Hindi, Tamil...); none for English-speaking or unknown countries. */
+    static String[] languages(String country) {
+        for (String row : LOCAL) if (row.startsWith(country + "=") && !country.isEmpty()) return row.substring(3).split(",");
+        return new String[0];
+    }
+
+    /** One page of a language's most popular titles. `rest` = "Hindi" or "Hindi&skip=20". Null when it can't be reached. */
+    static List<Title> language(String type, String rest, boolean diskOnly) {
+        try {
+            String[] parts = rest.split("&", 2);
+            String path = TMDB + "/catalog/" + type + "/tmdb.language/genre=" + java.net.URLEncoder.encode(parts[0], "UTF-8").replace("+", "%20")
+                + (parts.length > 1 ? "&" + parts[1] : "") + ".json";
+            String text = diskOnly ? disk(path) : get(path, true);
+            if (text == null) return null;
+            List<Title> out = parseTmdb(text, type);
+            if (out.isEmpty() && !diskOnly) file(path).delete();   // an error page: don't keep it for six hours
+            return out;
+        } catch (java.io.UnsupportedEncodingException e) {
+            return null;
+        }
+    }
+
+    /** A country's row: the top titles of each of its languages (five at most), taken in turns. Null when none could be read. */
+    static List<Title> local(String type, String country, boolean diskOnly) {
+        String[] langs = languages(country);
+        List<List<Title>> lists = java.util.Arrays.stream(langs).limit(5).parallel()
+            .map(l -> language(type, l, diskOnly)).collect(java.util.stream.Collectors.toList());
+        java.util.Map<String, Title> out = new java.util.LinkedHashMap<>();
+        boolean any = false;
+        for (List<Title> l : lists) {
+            if (l == null && diskOnly) return null;
+            any |= l != null;
+        }
+        for (int i = 0; i < 20 && out.size() < 30; i++) for (List<Title> l : lists) if (l != null && i < l.size()) out.putIfAbsent(l.get(i).id, l.get(i));
+        return any ? new ArrayList<>(out.values()) : null;
+    }
+
+    /** The TMDB addon's titles under their IMDb ids (from each one's IMDb link), so title pages, subtitles and site links work as for Cinemeta's. */
+    static List<Title> parseTmdb(String json, String type) {
+        List<Title> out = new ArrayList<>();
+        try {
+            JSONArray metas = new JSONObject(json).getJSONArray("metas");
+            for (int i = 0; i < metas.length(); i++) {
+                JSONObject o = metas.getJSONObject(i);
+                JSONArray links = o.optJSONArray("links");
+                String imdb = "";
+                for (int k = 0; links != null && k < links.length() && imdb.isEmpty(); k++) {
+                    java.util.regex.Matcher m = java.util.regex.Pattern.compile("imdb\\.com/title/(tt\\d+)").matcher(links.getJSONObject(k).optString("url"));
+                    if (m.find()) imdb = m.group(1);
+                }
+                if (imdb.isEmpty() || o.optString("name").isEmpty()) continue;
+                Title t = parse(o, type);
+                t.tmdb = o.optString("id").replaceFirst("^tmdb:", "");
+                t.id = imdb;
+                t.poster = t.poster.replace("/t/p/w342/", "/t/p/w500/");   // sharp on a TV card
+                out.add(t);
+            }
+        } catch (JSONException ignored) { }
+        return out;
+    }
+
+    /** A wide picture for a title: its own, else Cinemeta's by IMDb id ("" when there is no id to ask by). */
+    static String backdrop(Title t) {
+        return !t.background.isEmpty() ? t.background : t.id.startsWith("tt") ? "https://images.metahub.space/background/medium/" + t.id + "/img" : "";
+    }
+
     /** The list if a fresh copy is already on disk (no network), else null: lets a row draw without waiting. */
     static List<Title> cached(String type, String extra) {
+        String key = type + "|" + extra;
+        Object[] hit = memo.get(key);
+        if (hit != null && System.currentTimeMillis() - (Long) hit[0] < 10 * 60000) { @SuppressWarnings("unchecked") List<Title> l = (List<Title>) hit[1]; return l; }
+        List<Title> list = fromDisk(type, extra);
+        if (list != null && !list.isEmpty()) memo.put(key, new Object[]{System.currentTimeMillis(), list});
+        return list;
+    }
+
+    /** Everything cached counts as old from now: the next read asks the network (and still falls back to the old copy offline). */
+    static void expire() {
+        memo.clear();
+        File[] all = new File(App.app.getFilesDir(), "catalog").listFiles();
+        if (all != null) for (File f : all) f.setLastModified(1000);
+    }
+
+    // Lists already read and parsed, for ten minutes: a tab switch does not read and parse its files again
+    static final java.util.Map<String, Object[]> memo = new java.util.concurrent.ConcurrentHashMap<>();
+
+    static List<Title> fromDisk(String type, String extra) {
+        if (extra.startsWith("local=")) return local(type, extra.substring(6), true);
+        if (extra.startsWith("genre=" + LANG)) return language(type, extra.substring(6 + LANG.length()), true);
         if (extra.equals(NEW_ANIME)) return newAnime(true);
         if (extra.equals(TRENDING_ANIME)) return kitsu("kitsu-anime-trending", new int[]{0}, 0, true);
         if (extra.startsWith("genre=" + POPULAR_ANIME)) return popularAnime(extra, true);
@@ -230,6 +336,7 @@ final class Catalog {
             t.country = full.country;
             t.awards = full.awards;
             t.status = full.status;
+            t.trailer = full.trailer;
             if (!full.tmdb.isEmpty()) t.tmdb = full.tmdb;
             if (!full.year.isEmpty()) t.year = full.year;
             if (!full.rating.isEmpty()) t.rating = full.rating;
@@ -274,7 +381,7 @@ final class Catalog {
         t.runtime = o.optString("runtime");
         JSONArray g = o.optJSONArray("genres");
         if (g == null) g = o.optJSONArray("genre");
-        List<String> names = new ArrayList<>();
+        java.util.Set<String> names = new java.util.LinkedHashSet<>();   // TMDB can name one twice
         for (int i = 0; g != null && i < g.length(); i++) names.add(g.getString(i));
         t.genres = String.join(" · ", names);
         t.cast = joined(o.optJSONArray("cast"), 6);
@@ -283,6 +390,8 @@ final class Catalog {
         t.country = o.optString("country");
         t.awards = o.optString("awards");
         t.status = o.optString("status");
+        JSONArray trailers = o.optJSONArray("trailers");
+        if (trailers != null && trailers.length() > 0) t.trailer = trailers.getJSONObject(0).optString("source");
         JSONArray videos = o.optJSONArray("videos");
         for (int i = 0; videos != null && i < videos.length(); i++) {
             JSONObject v = videos.getJSONObject(i);

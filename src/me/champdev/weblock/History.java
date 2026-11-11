@@ -16,13 +16,13 @@ final class History {
     static final int MAX = 60;
     static final Pattern CONTENT = Pattern.compile("(?i)/(movies?|tv|series|shows?|watch|episodes?|anime|films?|drama|title|play|stream|live|match|event|channel)([/-]|$)");
     static final Pattern NOT_CONTENT = Pattern.compile("(?i)/(search|genres?|category|categories|browse|filter|trending|popular|top|list|login|account)([/-]|$)");
-    static final Pattern EP_TEXT = Pattern.compile("(?i)\\b(?:S(\\d{1,2})\\s*E(\\d{1,4})|Season\\s*(\\d+)\\W*Episode\\s*(\\d+)|(?:Episode|Ep\\.?)\\s*(\\d+))\\b");
+    static final Pattern EP_TEXT = Pattern.compile("(?i)\\b(?:S(\\d{1,2})\\s*E(\\d{1,4})|Season\\s*(\\d{1,3})\\W*Episode\\s*(\\d{1,5})|(?:Episode|Ep\\.?)\\s*(\\d{1,5}))\\b");
     static final Pattern[] EP_URL = {
         Pattern.compile("(?i)/(?:tv|series|show)/[^/?#]+/(\\d{1,2})/(\\d{1,4})(?:[/?#]|$)"),
-        Pattern.compile("(?i)season[-/=](\\d+).*?episode[-/=](\\d+)"),
-        Pattern.compile("(?i)[?&]s=(\\d+).*?[?&]e=(\\d+)"),
+        Pattern.compile("(?i)season[-/=](\\d{1,3})(?!\\d).*?episode[-/=](\\d{1,5})(?!\\d)"),
+        Pattern.compile("(?i)[?&]s=(\\d{1,3})(?!\\d).*?[?&]e=(\\d{1,5})(?!\\d)"),
     };
-    static final Pattern EP_ONLY_URL = Pattern.compile("(?i)(?:episode|ep)[-/=](\\d+)");
+    static final Pattern EP_ONLY_URL = Pattern.compile("(?i)(?:episode|ep)[-/=](\\d{1,6})(?!\\d)");   // digits are capped everywhere here: a longer run is an id and would overflow an int
     // Site taglines like "Movies, TV Shows & Anime" (shown before a page sets its real title)
     static final Pattern GENERIC = Pattern.compile("(?i)^(watch|free|online|hd|movies?|films?|tv|shows?|series|anime|dramas?|cartoons?|stream(ing)?|and|for|in|[,&|·:\\s-])+$");
     static final Pattern JUNK_TAIL = Pattern.compile("(?i)\\s+(online|free|hd|streaming|full movie|for free|eng(lish)? sub(bed)?|subbed|dubbed)\\b.*$");

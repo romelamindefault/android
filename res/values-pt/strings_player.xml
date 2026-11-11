@@ -120,4 +120,6 @@
     <string name="player_sub_dub">Legendado / Dublado: %1$s</string>
     <string name="player_home">Início</string>
     <string name="player_more">Mais</string>
+    <string name="player_channels">Canais</string>
+    <string name="player_more_watch">Mais para assistir</string>
 </resources>

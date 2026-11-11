@@ -130,4 +130,5 @@
     <string name="iptv_unpin">Desafixar</string>
     <string name="iptv_pinned">Fixado: %1$s</string>
     <string name="iptv_unpinned">Desafixado: %1$s</string>
+    <string name="title_trailer">Trailer</string>
 </resources>

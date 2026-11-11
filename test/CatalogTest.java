@@ -30,6 +30,14 @@ public class CatalogTest {
         check("overview present", !s.overview.isEmpty());
         check("garbage gives empty list", Catalog.parseList("<html>nope</html>", "movie").isEmpty());
 
+        List<Catalog.Title> local = Catalog.parseTmdb(new String(Files.readAllBytes(Paths.get("test/fixtures/tmdb-language.json")), java.nio.charset.StandardCharsets.UTF_8), "movie");
+        check("TMDB titles without an IMDb link are dropped", local.size() == 2);
+        check("TMDB title goes by its IMDb id, TMDB id kept", local.get(0).id.startsWith("tt") && local.get(0).tmdb.matches("\\d+") && !local.get(0).poster.isEmpty());
+        check("TMDB garbage gives empty list", Catalog.parseTmdb("<html>", "movie").isEmpty());
+        check("India has Hindi first", Catalog.languages("IN")[0].equals("Hindi") && Catalog.languages("IN").length > 3);
+        check("no local list for the US or an unknown country", Catalog.languages("US").length == 0 && Catalog.languages("").length == 0 && Catalog.languages("I").length == 0);
+        check("backdrop from the IMDb id", Catalog.backdrop(local.get(0)).startsWith("http") && Catalog.backdrop(new Catalog.Title()).isEmpty());
+
         check("start year of a range", Catalog.startYear("2002-2007") == 2002 && Catalog.startYear("2020–") == 2020 && Catalog.startYear("") == 0);
         long today = java.time.LocalDate.parse("2026-11-07").toEpochDay();
         Catalog.Title m = new Catalog.Title();

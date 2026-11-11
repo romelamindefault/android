@@ -130,4 +130,5 @@
     <string name="iptv_unpin">Lepas sematan</string>
     <string name="iptv_pinned">Disematkan: %1$s</string>
     <string name="iptv_unpinned">Sematan dilepas: %1$s</string>
+    <string name="title_trailer">Trailer</string>
 </resources>

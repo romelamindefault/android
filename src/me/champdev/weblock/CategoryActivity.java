@@ -35,6 +35,7 @@ public class CategoryActivity extends Home {
             }
             grid.add(s);
         }
-        if (App.tv && firstCard != null) col.postDelayed(firstCard::requestFocus, 60);
+        android.view.View first = firstCard;   // at once; not when coming back to this list (the focus returns to the card it left)
+        if (App.tv && first != null && !skipFocus && !first.requestFocus()) col.post(first::requestFocus);
     }
 }

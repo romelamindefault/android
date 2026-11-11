@@ -86,7 +86,9 @@ final class Warp {
                     if (gen != mine) { p.destroy(); return; }
                     port = Integer.parseInt(line.substring(6).trim());
                 }
-                App.main.post(() -> { if (gen == mine) applyProxy(() -> { if (gen == mine) set(State.ON, ""); }); });
+                // The web engine is loaded (and pointed at WARP) only once a site is opened: Home, the catalog, IPTV and the player
+                // don't use it, and it costs tens of MB. A site screen sets the route itself before its first page (WebActivity).
+                App.main.post(() -> { if (gen != mine) return; if (web) applyProxy(() -> { if (gen == mine) set(State.ON, ""); }); else set(State.ON, ""); });
                 // Keep draining output so the helper never blocks on a full pipe
                 while ((line = out.readLine()) != null) log(line.startsWith("LOG ") ? line.substring(4) : line);
                 if (end(mine)) set(State.FAILED, "helper stopped");
@@ -116,7 +118,7 @@ final class Warp {
             if (proc != null) proc.destroy();
             proc = null;
         }
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE))
+        if (web && WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE))
             ProxyController.getInstance().clearProxyOverride(App.main::post, () -> { });
         set(State.OFF, "");
     }
@@ -135,7 +137,10 @@ final class Warp {
     }
 
     /** Same, and runs `then` once the WebView really uses the new route (a reload before that would still go the old way). */
+    static volatile boolean web;   // a site has been opened: the web engine is in use
+
     static void route(boolean viaWarp, Runnable then) {
+        web = true;
         direct = !viaWarp;
         App.main.post(() -> {
             if (!WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE) || state != State.ON) { then.run(); return; }

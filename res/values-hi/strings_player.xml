@@ -120,4 +120,6 @@
     <string name="player_sub_dub">सब / डब: %1$s</string>
     <string name="player_home">होम</string>
     <string name="player_more">और</string>
+    <string name="player_channels">चैनल</string>
+    <string name="player_more_watch">और देखें</string>
 </resources>

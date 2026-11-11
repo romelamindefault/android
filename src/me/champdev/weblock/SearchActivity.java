@@ -20,7 +20,7 @@ import java.util.concurrent.Executors;
 
 /** Type to find a site (by name, tag, language or row) or something you watched. */
 public class SearchActivity extends Home {
-    static final int MAX_SITES = 120;
+    static final int MAX_SITES = 120, DEBOUNCE = 450;   // ms of quiet after the last key
     // Its own threads: the shared pool is often busy with poster downloads, and the answer would wait behind them
     static final ExecutorService lane = Executors.newCachedThreadPool();
     EditText box;
@@ -36,6 +36,12 @@ public class SearchActivity extends Home {
     @Override boolean tabs() { return false; }
 
     @Override boolean kindBadges() { return true; }   // movies, series and anime share one grid here
+
+    @Override protected void onDestroy() {
+        App.main.removeCallbacks(render);   // a pending redraw must not outlive the screen
+        App.main.removeCallbacks(fetchTitles);
+        super.onDestroy();
+    }
 
     @Override void build() {
         col.removeAllViews();
@@ -58,14 +64,19 @@ public class SearchActivity extends Home {
             @Override public void onTextChanged(CharSequence s, int a, int b, int c) { }
             @Override public void afterTextChanged(Editable e) {
                 query = e.toString();
+                // Nothing is searched or redrawn until typing pauses (a TV remote types slowly: each letter used to redraw the page)
                 App.main.removeCallbacks(render);
-                App.main.postDelayed(render, 150);
                 App.main.removeCallbacks(fetchTitles);
-                App.main.postDelayed(fetchTitles, 300);
+                App.main.postDelayed(render, DEBOUNCE);
+                App.main.postDelayed(fetchTitles, DEBOUNCE);
             }
         });
         // "Search" on the keyboard: hide it so the arrows can move over the results
         box.setOnEditorActionListener((v, action, ev) -> {
+            App.main.removeCallbacks(render);   // Search pressed: no waiting
+            App.main.removeCallbacks(fetchTitles);
+            showResults();
+            searchTitles();
             ((InputMethodManager) getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(box.getWindowToken(), 0);
             if (firstCard != null) firstCard.requestFocus();
             return true;
@@ -156,7 +167,7 @@ public class SearchActivity extends Home {
         }
         if (!chans.isEmpty()) {
             results.addView(heading(App.t(R.string.search_channels_n, chans.size())));
-            int cols = App.tv ? 6 : 3;
+            int cols = App.tv ? 8 : 3;
             LinearLayout row = row(results);
             for (Iptv.Channel c : chans.subList(0, Math.min(14, chans.size()))) row.addView(channelCard(c, cols, "search"));
             if (chans.size() > 14) {

@@ -108,7 +108,22 @@ final class Sites {
     }
 
     /** Category title -> sites, in display order. */
-    static Map<String, List<Site>> load() {
+    // Parsed once per file version: every tab asks for these, and parsing 100 KB of markdown each time made tab switches lag
+    static Map<String, List<Site>> loaded, langs;
+    static long loadedAt, langsAt;
+
+    static long stamp(String name) {
+        File f = new File(App.app.getFilesDir(), name);
+        return f.lastModified() + f.length();
+    }
+
+    static synchronized Map<String, List<Site>> load() {
+        long now = stamp(VIDEO_FILE);
+        if (loaded == null || now != loadedAt) { loaded = parseSites(); loadedAt = now; }
+        return loaded;
+    }
+
+    static Map<String, List<Site>> parseSites() {
         Map<String, List<Site>> out = new LinkedHashMap<>();
         for (String c : Cats.ORDER) out.put(c, new ArrayList<>());
         String section = "";
@@ -159,7 +174,13 @@ final class Sites {
     }
 
     /** Language -> its streaming sites, from FMHY's non-English page ("# ► Spanish / Español" > "## ▷ Streaming"). */
-    static Map<String, List<Site>> languages() {
+    static synchronized Map<String, List<Site>> languages() {
+        long now = stamp(LANG_FILE);
+        if (langs == null || now != langsAt) { langs = parseLanguages(); langsAt = now; }
+        return langs;
+    }
+
+    static Map<String, List<Site>> parseLanguages() {
         Map<String, List<Site>> out = new LinkedHashMap<>();
         String lang = null;
         boolean streaming = false;
@@ -246,11 +267,12 @@ final class Sites {
     }
 
     static String readAll(InputStream in) throws IOException {
-        ByteArrayOutputStream buf = new ByteArrayOutputStream();
-        byte[] b = new byte[16384];
-        for (int n; (n = in.read(b)) > 0; ) buf.write(b, 0, n);
-        in.close();
-        return buf.toString("UTF-8");
+        try (InputStream src = in) {   // closed also when the read fails half way
+            ByteArrayOutputStream buf = new ByteArrayOutputStream();
+            byte[] b = new byte[16384];
+            for (int n; (n = src.read(b)) > 0; ) buf.write(b, 0, n);
+            return buf.toString("UTF-8");
+        }
     }
 
     /** A site the user typed in; it lands in Favorites. */
