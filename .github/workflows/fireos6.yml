@@ -228,7 +228,7 @@ jobs:
           # 5c. Download feature (2.20): Android 8+ names. Those code paths are already behind SDK_INT >= 26/29/33 checks at run time
           #     so on Fire OS 6 they never run. These edits only make the code compile and pass the 7.1 check.
           rep(DS, "import android.app.NotificationChannel;\n", "")
-          rep(DS, "new NotificationChannel(", "new android.app.NotificationChannel(", 2)
+          rep(SRC + "PlayerActivity.java", "android.Manifest.permission.POST_NOTIFICATIONS", '"android.permission.POST_NOTIFICATIONS"', 2)
 
           DL = SRC + "Downloads.java"
           # MediaMuxer(FileDescriptor) is Android 8; before that use the file path (on 7.1 the download is always a plain file)
