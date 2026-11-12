@@ -9,7 +9,7 @@ name: Fire OS 6 build
 
 on:
   schedule:
-    - cron: "23 4 */2 * *"
+        - cron: "23 4 * * *"
   workflow_dispatch:
     inputs:
       force:
