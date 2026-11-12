@@ -215,6 +215,16 @@ jobs:
           rep(SRC + "Cast.java", "getSystemService(NotificationManager.class).createNotificationChannel(", "if (android.os.Build.VERSION.SDK_INT >= 26) getSystemService(NotificationManager.class).createNotificationChannel(")
           rep(SRC + "Cast.java", 'new Notification.Builder(this, "cast")', '(android.os.Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(this, "cast") : new Notification.Builder(this))')
 
+          # 5b. DownloadService (new in 2.20): foreground service + notification channels are Android 8 only
+          DS = SRC + "DownloadService.java"
+          rep(DS, "c.startForegroundService(new Intent(c, DownloadService.class))", "Compat.startFg(c, new Intent(c, DownloadService.class))")
+          rep(DS, "NotificationManager nm = getSystemService(NotificationManager.class);", "NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);")
+          rep(DS, "NotificationManager nm = c.getSystemService(NotificationManager.class);", "NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);")
+          rep(DS, "s.getSystemService(NotificationManager.class).notify(", "((NotificationManager) s.getSystemService(Context.NOTIFICATION_SERVICE)).notify(")
+          rep(DS, "nm.createNotificationChannel(", "if (android.os.Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(", 2)
+          rep(DS, 'new Notification.Builder(c, "downloads")', '(android.os.Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(c, "downloads") : new Notification.Builder(c))')
+          rep(DS, 'new Notification.Builder(c, "downloads_done")', '(android.os.Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(c, "downloads_done") : new Notification.Builder(c))')
+
           # 6. View methods from Android 8: guard every plain statement that calls them
           import re
           for jf in pathlib.Path("src").rglob("*.java"):
