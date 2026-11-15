@@ -1,7 +1,7 @@
 name: Fire OS 6 build
 
 # Automatic Fire OS 6 / Android 7.1 build of FMHYPlay, official releases only.
-# Every 2 days it looks at the developer's newest official release (not the work in progress on main). When there is a new
+# Every day it looks at the developer's newest official release (not the work in progress on main). When there is a new
 # one it applies the Android 7.1 changes, builds, checks the result, and publishes the TV APK as a new release in this fork.
 # If any check fails nothing is published, so the last good APK stays in place.
 # Newest APK, always the same link: https://github.com/<your user>/android/releases/latest/download/FMHYPlay-TV-fireos6.apk
@@ -9,7 +9,7 @@ name: Fire OS 6 build
 
 on:
   schedule:
-        - cron: "23 4 * * *"
+    - cron: "23 4 * * *"
   workflow_dispatch:
     inputs:
       force:
@@ -99,6 +99,7 @@ jobs:
         run: |
           python3 - <<'PYEOF'
           import pathlib
+          import re
 
           SRC = "src/me/champdev/weblock/"
 
@@ -185,6 +186,10 @@ jobs:
                   }
               }
 
+              static String b64(byte[] b) { return android.util.Base64.encodeToString(b, android.util.Base64.NO_WRAP); }
+
+              static byte[] b64d(String s) { return android.util.Base64.decode(s, android.util.Base64.DEFAULT); }
+
               static void startFg(Context c, Intent i) {
                   if (android.os.Build.VERSION.SDK_INT >= 26) c.startForegroundService(i); else c.startService(i);
               }
@@ -209,41 +214,50 @@ jobs:
               if "java.time.LocalDate.now().toEpochDay()" in t:
                   jf.write_text(t.replace("java.time.LocalDate.now().toEpochDay()", "Compat.today()"), encoding="utf-8")
 
-          # 5. Cast service and notification
-          rep(SRC + "Cast.java", "c.startForegroundService(new Intent(c, Keep.class))", "Compat.startFg(c, new Intent(c, Keep.class))")
-          rep(SRC + "Chromecast.java", "c.startForegroundService(new Intent(c, Cast.Keep.class))", "Compat.startFg(c, new Intent(c, Cast.Keep.class))")
-          rep(SRC + "Cast.java", "getSystemService(NotificationManager.class).createNotificationChannel(", "if (android.os.Build.VERSION.SDK_INT >= 26) getSystemService(NotificationManager.class).createNotificationChannel(")
-          rep(SRC + "Cast.java", 'new Notification.Builder(this, "cast")', '(android.os.Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(this, "cast") : new Notification.Builder(this))')
+          # 5. Foreground services and notifications (Android 8 notification channels), wherever the app uses them
+          for jf in pathlib.Path("src").rglob("*.java"):
+              if jf.name == "Compat.java":
+                  continue
+              t = jf.read_text(encoding="utf-8")
+              t2 = re.sub(r"(?<![\w.])(\w+)\.startForegroundService\(", r"Compat.startFg(\1, ", t)
+              t2 = re.sub(r"(?<![\w.])startForegroundService\(", "Compat.startFg(this, ", t2)
+              out = []
+              for line in t2.split("\n"):
+                  if "SDK_INT" not in line:
+                      line = re.sub(r"new Notification\.Builder\(([^,()]+),\s*([^,()]+)\)",
+                                    r"(android.os.Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(\1, \2) : new Notification.Builder(\1))", line)
+                      st = line.strip()
+                      if "createNotificationChannel(" in st and st.endswith(";") and not st.startswith(("if", "//", "*")):
+                          line = line[:len(line) - len(line.lstrip())] + "if (android.os.Build.VERSION.SDK_INT >= 26) " + st
+                  out.append(line)
+              t2 = "\n".join(out)
+              if t2 != t:
+                  jf.write_text(t2, encoding="utf-8")
 
-          # 5b. DownloadService (new in 2.20): foreground service + notification channels are Android 8 only
-          DS = SRC + "DownloadService.java"
-          rep(DS, "c.startForegroundService(new Intent(c, DownloadService.class))", "Compat.startFg(c, new Intent(c, DownloadService.class))")
-          rep(DS, "NotificationManager nm = getSystemService(NotificationManager.class);", "NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);")
-          rep(DS, "NotificationManager nm = c.getSystemService(NotificationManager.class);", "NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);")
-          rep(DS, "s.getSystemService(NotificationManager.class).notify(", "((NotificationManager) s.getSystemService(Context.NOTIFICATION_SERVICE)).notify(")
-          rep(DS, "nm.createNotificationChannel(", "if (android.os.Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(", 2)
-          rep(DS, 'new Notification.Builder(c, "downloads")', '(android.os.Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(c, "downloads") : new Notification.Builder(c))')
-          rep(DS, 'new Notification.Builder(c, "downloads_done")', '(android.os.Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(c, "downloads_done") : new Notification.Builder(c))')
-          
-          # 5c. Download feature (2.20): Android 8+ names. Those code paths are already behind SDK_INT >= 26/29/33 checks at run time
-          #     so on Fire OS 6 they never run. These edits only make the code compile and pass the 7.1 check.
-          rep(DS, "import android.app.NotificationChannel;\n", "")
-          rep(DS, "new NotificationChannel(", "new android.app.NotificationChannel(", 2)
+          # 5b. Other Android 8+ names: java.util.Base64, the Downloads feature (MediaMuxer on a file descriptor, MediaStore constants), a permission constant.
+          #     Each edit is made only where the text exists; the Android 7.1 check after the build proves nothing was missed.
+          def opt(path, old, new):
+              p = pathlib.Path(path)
+              if not p.exists():
+                  return
+              t = p.read_text(encoding="utf-8")
+              if old in t:
+                  p.write_text(t.replace(old, new), encoding="utf-8")
 
-          DL = SRC + "Downloads.java"
-          # MediaMuxer(FileDescriptor) is Android 8; before that use the file path (on 7.1 the download is always a plain file)
-          rep(DL, "mux = new MediaMuxer(out.fd(), MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);",
+          for jf in pathlib.Path("src").rglob("*.java"):
+              if jf.name == "Compat.java":
+                  continue
+              opt(jf, "java.util.Base64.getEncoder().encodeToString(", "Compat.b64(")
+              opt(jf, "java.util.Base64.getDecoder().decode(", "Compat.b64d(")
+              opt(jf, "MediaStore.MediaColumns.RELATIVE_PATH", '"relative_path"')
+              opt(jf, "MediaStore.MediaColumns.IS_PENDING", '"is_pending"')
+              opt(jf, "MediaStore.VOLUME_EXTERNAL_PRIMARY", '"external_primary"')
+              opt(jf, "android.Manifest.permission.POST_NOTIFICATIONS", '"android.permission.POST_NOTIFICATIONS"')
+          # MediaMuxer(FileDescriptor, int) is Android 8. Before that use the file path (on Android 7 a download is always a plain file).
+          opt(SRC + "Downloads.java", "mux = new MediaMuxer(out.fd(), MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);",
               "mux = android.os.Build.VERSION.SDK_INT >= 26 ? new MediaMuxer(out.fd(), MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4) : new MediaMuxer(it.out, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);")
-          # MediaStore constants added in Android 10: use their literal values (only used on Android 10+ anyway)
-          rep(DL, "MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)", 'Uri.parse("content://media/external_primary/downloads")')
-          rep(DL, "MediaStore.VOLUME_EXTERNAL_PRIMARY", '"external_primary"')
-          rep(DL, "MediaStore.MediaColumns.RELATIVE_PATH", '"relative_path"', 2)
-          rep(DL, "MediaStore.MediaColumns.IS_PENDING", '"is_pending"', 2)
 
-          # POST_NOTIFICATIONS is Android 13: same permission as a plain string
-          rep(SRC + "PlayerActivity.java", "android.Manifest.permission.POST_NOTIFICATIONS", '"android.permission.POST_NOTIFICATIONS"', 2)
           # 6. View methods from Android 8: guard every plain statement that calls them
-          import re
           for jf in pathlib.Path("src").rglob("*.java"):
               t = jf.read_text(encoding="utf-8")
               t2 = re.sub(r"(?m)^(\s*)((?:\w+\.)*\w+\.(?:setTooltipText|setDefaultFocusHighlightEnabled)\(.*\);)(\s*(?://.*)?)$",
@@ -263,7 +277,7 @@ jobs:
           rep("assets/roles.js", ")?.forEach(t => out.add(t.toLowerCase()));", ") || []).forEach(t => out.add(t.toLowerCase()));")
 
           # 9. Safety net: stop the build if any call that crashes on Android 7.1 is left without a version check
-          bad = re.compile(r"String\.join\(|java\.time\.|java\.nio\.file|\.startForegroundService\(|setTooltipText\(|setDefaultFocusHighlightEnabled\(|NotificationChannel\(|getSystemService\(NotificationManager")
+          bad = re.compile(r"String\.join\(|java\.time\.|java\.nio\.file|startForegroundService\(|java\.util\.Base64|Base64\.get(?:En|De)coder|setTooltipText\(|setDefaultFocusHighlightEnabled\(|NotificationChannel\(|createNotificationChannel\(|Notification\.Builder\([^()]*,")
           left = []
           for jf in pathlib.Path("src").rglob("*.java"):
               if jf.name == "Compat.java":
@@ -354,6 +368,24 @@ jobs:
                   cur["sym"] = re.sub(r"\s+", " ", line.strip())
 
           guard = re.compile(r"SDK_INT\s*(>=\s*(2[6-9]|[3-9]\d)|>\s*(2[5-9]|[3-9]\d))")
+
+          def guarded_above(path, ln):
+              """True when the line sits inside an "if (SDK_INT >= 26+) {" block that is still open, or right under a one-line "if (SDK_INT >= 26+)"."""
+              try:
+                  lines = open(path, encoding="utf-8").read().split("\n")
+              except Exception:
+                  return False
+              for k in range(ln - 2, max(-1, ln - 30), -1):
+                  if guard.search(lines[k].split("//")[0]):
+                      between = lines[k:ln - 1]
+                      depth = sum(x.count("{") - x.count("}") for x in between)
+                      if "{" in lines[k]:
+                          if depth > 0:
+                              return True
+                      elif all(not b.strip() or b.strip().startswith("//") for b in lines[k + 1:ln - 2]) or k == ln - 2:
+                          return True
+              return False
+
           bad, seen = [], 0
           for e in errs:
               if "package R does not exist" in e["msg"] or re.search(r"(class|variable) R$", e["sym"]):
@@ -366,7 +398,7 @@ jobs:
                   continue   # only caused by the generated resource class missing from this check
               seen += 1
               key = "%s|%s|%s" % (os.path.basename(e["file"]), e["msg"], e["sym"])
-              if key in KNOWN or guard.search(src):
+              if key in KNOWN or guard.search(src) or src.strip().startswith("import ") or guarded_above(e["file"], e["line"]):
                   continue
               bad.append((key, "%s:%d: %s" % (e["file"], e["line"], src.strip()[:110])))
 
